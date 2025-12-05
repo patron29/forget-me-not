@@ -12,10 +12,10 @@ import { useReminders } from '../utils/ReminderContext';
 import ReminderItem from '../components/ReminderItem';
 
 export default function ReminderHistoryScreen() {
-  const { getCompletedReminders, toggleReminder, deleteReminder, reminders } = useReminders();
+  const { reminders, toggleReminder, deleteReminder } = useReminders();
   const [filter, setFilter] = useState('all'); // 'all', 'today', 'week', 'month'
 
-  const completedReminders = getCompletedReminders();
+  const completedReminders = reminders.filter(r => r.completed);
 
   const getFilteredReminders = () => {
     const now = new Date();

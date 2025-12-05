@@ -17,11 +17,11 @@ import ReminderItem from '../components/ReminderItem';
 import LocationPicker from '../components/LocationPicker';
 
 export default function ReminderListScreen() {
-  const { addReminder, getActiveReminders, toggleReminder, deleteReminder, locationPermission } = useReminders();
+  const { reminders, addReminder, toggleReminder, deleteReminder, locationPermission } = useReminders();
   const [inputText, setInputText] = useState('');
   const [showLocationPicker, setShowLocationPicker] = useState(false);
 
-  const activeReminders = getActiveReminders();
+  const activeReminders = reminders.filter(r => !r.completed);
 
   const handleVoiceInput = (text) => {
     setInputText(text);

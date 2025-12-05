@@ -20,6 +20,17 @@ export default function LocationPicker({ visible, onClose, onLocationSelect }) {
   const [loading, setLoading] = useState(false);
   const [radius, setRadius] = useState('200');
 
+  // Reset form when modal closes
+  useEffect(() => {
+    if (!visible) {
+      setLocationName('');
+      setAddress('');
+      setCurrentLocation(null);
+      setRadius('200');
+      setLoading(false);
+    }
+  }, [visible]);
+
   const getCurrentLocation = async () => {
     try {
       setLoading(true);

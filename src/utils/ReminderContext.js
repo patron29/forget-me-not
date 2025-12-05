@@ -19,6 +19,8 @@ Notifications.setNotificationHandler({
 export const ReminderProvider = ({ children }) => {
   const [reminders, setReminders] = useState([]);
   const [locationPermission, setLocationPermission] = useState(null);
+  const [isLoaded, setIsLoaded] = useState(false);
+  const [isGeofencingActive, setIsGeofencingActive] = useState(false);
 
   useEffect(() => {
     loadReminders();
@@ -26,10 +28,11 @@ export const ReminderProvider = ({ children }) => {
   }, []);
 
   useEffect(() => {
-    if (reminders.length > 0 || reminders.length === 0) {
+    // Only save after initial load is complete
+    if (isLoaded) {
       saveReminders();
     }
-  }, [reminders]);
+  }, [reminders, isLoaded]);
 
   const requestPermissions = async () => {
     try {
@@ -56,8 +59,10 @@ export const ReminderProvider = ({ children }) => {
       if (savedReminders) {
         setReminders(JSON.parse(savedReminders));
       }
+      setIsLoaded(true);
     } catch (error) {
       console.error('Error loading reminders:', error);
+      setIsLoaded(true);
     }
   };
 
@@ -71,7 +76,7 @@ export const ReminderProvider = ({ children }) => {
 
   const addReminder = async (text, location) => {
     const newReminder = {
-      id: Date.now().toString(),
+      id: `${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
       text,
       location: {
         name: location.name,
@@ -84,20 +89,26 @@ export const ReminderProvider = ({ children }) => {
       createdAt: new Date().toISOString(),
       completedAt: null,
       triggeredCount: 0,
+      lastTriggeredAt: null,
     };
 
-    setReminders([newReminder, ...reminders]);
+    setReminders(prevReminders => [newReminder, ...prevReminders]);
 
-    // Set up geofencing for this location
-    await setupGeofencing(newReminder);
+    // Set up geofencing only once for all reminders
+    await setupGeofencing();
 
     return newReminder;
   };
 
-  const setupGeofencing = async (reminder) => {
+  const setupGeofencing = async () => {
     try {
       if (locationPermission !== 'full') {
         console.log('Background location permission not granted');
+        return;
+      }
+
+      // Only start if not already active
+      if (isGeofencingActive) {
         return;
       }
 
@@ -111,6 +122,8 @@ export const ReminderProvider = ({ children }) => {
           notificationBody: 'Tracking your location for reminders',
         },
       });
+
+      setIsGeofencingActive(true);
     } catch (error) {
       console.error('Error setting up geofencing:', error);
     }
@@ -119,6 +132,7 @@ export const ReminderProvider = ({ children }) => {
   const checkProximity = async (currentLocation) => {
     try {
       const activeReminders = reminders.filter(r => !r.completed);
+      const remindersToUpdate = [];
 
       for (const reminder of activeReminders) {
         const distance = calculateDistance(
@@ -128,19 +142,33 @@ export const ReminderProvider = ({ children }) => {
           reminder.location.longitude
         );
 
-        // If within radius, trigger notification
+        // If within radius, check if we should trigger
         if (distance <= reminder.location.radius) {
-          await sendNotification(reminder);
+          // Throttle: Only trigger if not triggered in last 15 minutes
+          const now = Date.now();
+          const lastTriggered = reminder.lastTriggeredAt ? new Date(reminder.lastTriggeredAt).getTime() : 0;
+          const fifteenMinutes = 15 * 60 * 1000;
 
-          // Increment trigger count
-          setReminders(prevReminders =>
-            prevReminders.map(r =>
-              r.id === reminder.id
-                ? { ...r, triggeredCount: r.triggeredCount + 1 }
-                : r
-            )
-          );
+          if (now - lastTriggered >= fifteenMinutes) {
+            await sendNotification(reminder);
+            remindersToUpdate.push(reminder.id);
+          }
         }
+      }
+
+      // Update all triggered reminders in one batch
+      if (remindersToUpdate.length > 0) {
+        setReminders(prevReminders =>
+          prevReminders.map(r =>
+            remindersToUpdate.includes(r.id)
+              ? {
+                  ...r,
+                  triggeredCount: r.triggeredCount + 1,
+                  lastTriggeredAt: new Date().toISOString()
+                }
+              : r
+          )
+        );
       }
     } catch (error) {
       console.error('Error checking proximity:', error);
@@ -180,8 +208,8 @@ export const ReminderProvider = ({ children }) => {
   };
 
   const toggleReminder = (id) => {
-    setReminders(
-      reminders.map((reminder) =>
+    setReminders(prevReminders =>
+      prevReminders.map((reminder) =>
         reminder.id === id
           ? {
               ...reminder,
@@ -194,7 +222,7 @@ export const ReminderProvider = ({ children }) => {
   };
 
   const deleteReminder = (id) => {
-    setReminders(reminders.filter((reminder) => reminder.id !== id));
+    setReminders(prevReminders => prevReminders.filter((reminder) => reminder.id !== id));
   };
 
   const getActiveReminders = () => {

@@ -14,7 +14,14 @@ export default function ReminderItem({
   onToggle,
   onDelete,
   showCompletedDate = false,
+  showDate = false,
 }) {
+  // Safety check
+  if (!reminder || !reminder.location) {
+    console.error('ReminderItem: Invalid reminder data', reminder);
+    return null;
+  }
+
   const handleDelete = () => {
     Alert.alert(
       'Delete Reminder',

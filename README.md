@@ -1,48 +1,70 @@
-# Todo Voice App
+# Forget Me Not
 
-A full-featured React Native todo application with voice input capabilities, built with Expo.
+A location-based reminder app that sends you notifications when you arrive at specific places. Never forget to buy something or do a task when you're at the right location!
+
+## Concept
+
+**Forget Me Not** helps you remember tasks at the perfect moment - when you're at the right place. Set a reminder like "Buy BPO" at CVS, and the app will automatically notify you when you arrive at that location.
+
+### Example Use Cases
+
+- 🏪 "Buy milk" when at the grocery store
+- 💊 "Pick up prescription" at the pharmacy
+- 📬 "Mail package" at the post office
+- ⚽ "Return library books" at the library
+- 🏋️ "Bring water bottle" at the gym
+- 🏢 "Submit expense report" at work
 
 ## Features
 
-- **Voice & Text Input**: Add tasks using voice commands or traditional text input
-- **Task Management**: Create, complete, and delete tasks with ease
-- **Due Dates**: Set due dates for tasks with visual indicators (overdue, today, upcoming)
-- **Text-to-Speech**: Listen to your tasks read aloud
-- **History Tracking**: View completed tasks with filtering options (All, Today, Week, Month)
-- **Calendar View**: Visualize tasks on a calendar with color-coded markers
-- **Persistent Storage**: All tasks are saved locally using AsyncStorage
-- **Cross-Platform**: Runs on iOS, Android, and Web
+- **Location-Based Reminders**: Set reminders tied to specific locations
+- **Automatic Geofencing**: Get notified when you enter the location radius
+- **Voice & Text Input**: Add reminders using voice commands or text
+- **Current Location Detection**: Quickly select your current location
+- **Custom Radius**: Set how close you need to be (50-1000 meters)
+- **Location Groups**: View all reminders organized by location
+- **History Tracking**: See completed reminders with timestamps
+- **Text-to-Speech**: Listen to your reminders read aloud
+- **Background Location Tracking**: Works even when the app is closed
+- **Persistent Storage**: All reminders are saved locally
 
-## Screenshots
+## How It Works
 
-### My Tasks
-- Add new tasks with voice or text
-- Set due dates for tasks
-- Mark tasks as complete
-- Visual indicators for overdue and upcoming tasks
+1. **Create a Reminder**: Enter what you need to remember (e.g., "Buy BPO")
+2. **Select Location**: Choose the place where you want to be reminded (e.g., "CVS Pharmacy")
+3. **Set Radius**: Define how close you need to be (default: 200 meters)
+4. **Get Notified**: When you arrive at the location, you'll receive a notification
+5. **Mark Complete**: Check off the reminder when done
 
-### History
-- View all completed tasks
-- Filter by time period
+## Screens
+
+### Reminders Tab
+- View all active location-based reminders
+- Add new reminders with voice or text input
+- See location names and addresses for each reminder
+- Track how many times a reminder has been triggered
+
+### History Tab
+- View completed reminders
+- Filter by time period (All, Today, Week, Month)
 - See completion statistics
-- Clear all completed tasks
+- Clear history when needed
 
-### Calendar
-- Interactive calendar view
-- Color-coded task markers (due dates, completed, created)
-- Select any date to view tasks
-- Legend showing marker meanings
+### Locations Tab
+- View reminders grouped by location
+- See active and completed counts per location
+- Quickly access all reminders for a specific place
 
 ## Tech Stack
 
 - **React Native** 0.81.5
 - **Expo** SDK 54
+- **Expo Location** - Geolocation and geofencing
+- **Expo Notifications** - Local push notifications
+- **Expo Task Manager** - Background location tracking
 - **React Navigation** - Bottom tabs navigation
 - **AsyncStorage** - Local data persistence
 - **Expo Speech** - Text-to-speech functionality
-- **Expo AV** - Audio recording (for future voice implementation)
-- **React Native Calendars** - Calendar component
-- **DateTimePicker** - Date selection
 
 ## Getting Started
 
@@ -65,71 +87,89 @@ npm start
 # Run on specific platform
 npm run ios        # iOS simulator
 npm run android    # Android emulator
-npm run web        # Web browser
+npm run web        # Web browser (limited functionality)
 ```
 
-### Running on Web
+### Permissions Required
 
-```bash
-npm run web
-```
+The app requires the following permissions:
 
-Then open [http://localhost:8081](http://localhost:8081) in your browser.
-
-### Running on Mobile
-
-1. Install Expo Go on your device:
-   - [iOS App Store](https://apps.apple.com/app/expo-go/id982107779)
-   - [Google Play Store](https://play.google.com/store/apps/details?id=host.exp.exponent)
-
-2. Start the development server:
-   ```bash
-   npm start
-   ```
-
-3. Scan the QR code with Expo Go
+- **Location (Foreground)**: To detect your current location when adding reminders
+- **Location (Background)**: To track location and send notifications when you arrive at reminder locations
+- **Notifications**: To send you reminders when you reach a location
 
 ## Project Structure
 
 ```
-todo-voice-app/
+forget-me-not/
 ├── src/
 │   ├── components/
-│   │   ├── TodoItem.js       # Individual task component
-│   │   └── VoiceInput.js     # Voice recording button
+│   │   ├── ReminderItem.js      # Individual reminder component
+│   │   ├── VoiceInput.js        # Voice recording button
+│   │   └── LocationPicker.js    # Location selection modal
 │   ├── screens/
-│   │   ├── TodoListScreen.js # Main task list view
-│   │   ├── HistoryScreen.js  # Completed tasks view
-│   │   └── CalendarScreen.js # Calendar view
+│   │   ├── ReminderListScreen.js    # Main reminders view
+│   │   ├── ReminderHistoryScreen.js # Completed reminders
+│   │   └── LocationsScreen.js       # Location groups view
 │   └── utils/
-│       └── TodoContext.js    # Global state management
-├── assets/                   # App icons and images
-├── App.js                    # Root component
-├── app.json                  # Expo configuration
-└── package.json             # Dependencies
-
+│       └── ReminderContext.js   # Global state & geofencing
+├── assets/                      # App icons and images
+├── App.js                       # Root component
+├── app.json                     # Expo configuration
+└── package.json                 # Dependencies
 ```
 
-## Voice Input
+## How Geofencing Works
 
-Currently, the voice input feature uses a placeholder implementation. To add full speech-to-text functionality, integrate one of these services:
+The app uses Expo Location's geofencing capabilities to monitor your location in the background:
 
-- [@react-native-voice/voice](https://github.com/react-native-voice/voice) - React Native plugin
-- Google Cloud Speech-to-Text API
-- AWS Transcribe
-- Azure Speech Services
+1. **Background Tracking**: The app tracks your location even when closed (with permission)
+2. **Radius Detection**: Calculates distance to each reminder location using the Haversine formula
+3. **Notification Trigger**: Sends a notification when you're within the specified radius
+4. **Battery Optimized**: Uses balanced accuracy to minimize battery drain
+
+## Limitations
+
+- **Web Version**: Location tracking and notifications have limited functionality in web browsers
+- **Battery Usage**: Background location tracking can impact battery life
+- **iOS Background Restrictions**: iOS has strict rules about background location tracking
+- **Android Doze Mode**: Android's battery optimization may limit background tracking
+
+## Privacy & Data
+
+- All location data and reminders are stored locally on your device
+- No data is sent to external servers
+- Location tracking only occurs for active reminders
+- You can disable location permissions at any time
 
 ## Future Enhancements
 
-- [ ] Full voice recognition integration
-- [ ] Task editing functionality
-- [ ] Categories and tags
-- [ ] Push notifications for due tasks
-- [ ] Search and advanced filtering
-- [ ] Dark mode support
+- [ ] Smart location suggestions based on history
+- [ ] Recurring reminders for frequent locations
+- [ ] Categories and tags for reminders
+- [ ] Map view showing all reminder locations
+- [ ] Share locations with others
 - [ ] Cloud sync across devices
-- [ ] Recurring tasks
-- [ ] Subtasks and task dependencies
+- [ ] Smart notifications (don't alert if recently triggered)
+- [ ] Integration with calendar events
+- [ ] Popular places database (e.g., major retail chains)
+- [ ] Voice recognition for hands-free reminder creation
+
+## Troubleshooting
+
+### Notifications Not Working
+
+1. Check that notification permissions are enabled
+2. Ensure background location permission is granted
+3. On iOS, make sure "Always Allow" location access is selected
+4. Check that the app isn't being killed by battery optimization
+
+### Location Not Updating
+
+1. Verify location permissions are granted
+2. Check that location services are enabled on your device
+3. Try increasing the radius for reminders
+4. Ensure the app has background location permission
 
 ## License
 
@@ -138,3 +178,7 @@ MIT
 ## Acknowledgments
 
 Built with Claude Code
+
+---
+
+**Forget Me Not** - Because your phone knows where you are, so your reminders should too.

@@ -9,6 +9,8 @@ import {
   Animated,
   Modal,
   Image,
+  KeyboardAvoidingView,
+  Platform,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -173,7 +175,11 @@ export default function ReminderListScreen() {
 
   return (
     <View className="flex-1" style={{ backgroundColor: colors.background }}>
-      <View className="flex-1" style={{ backgroundColor: colors.background }}>
+      <KeyboardAvoidingView
+        className="flex-1"
+        style={{ backgroundColor: colors.background }}
+        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+      >
         {/* Header with Logo */}
         <Animated.View
           className="px-6 pb-5"
@@ -390,7 +396,7 @@ export default function ReminderListScreen() {
             </View>
           </View>
         </Modal>
-      </View>
+      </KeyboardAvoidingView>
     </View>
   );
 }

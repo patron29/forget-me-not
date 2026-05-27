@@ -3,27 +3,6 @@ import { render, fireEvent } from '@testing-library/react-native';
 import { Text, View } from 'react-native';
 import ErrorBoundary from '../src/components/ErrorBoundary';
 
-// Mock the theme
-jest.mock('../src/utils/theme', () => ({
-  COLORS: {
-    text: '#1a1a2e',
-    textSecondary: '#888888',
-    accent: '#FFD93D',
-    surface: '#FFFFFF',
-    background: '#F0F0F0',
-    pastelPink: '#FFCDD2',
-  },
-  SPACING: {
-    sm: 8,
-    md: 12,
-    lg: 16,
-    xl: 24,
-  },
-  BORDER_RADIUS: {
-    lg: 12,
-  },
-}));
-
 // Component that throws an error
 const ThrowError = () => {
   throw new Error('Test error');

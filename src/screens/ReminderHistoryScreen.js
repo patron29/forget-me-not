@@ -10,6 +10,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { useReminders } from '../utils/ReminderContext';
 import { useTheme } from '../utils/ThemeContext';
 import ReminderItem from '../components/ReminderItem';
+import { EmptyState } from '../components/ui';
 
 export default function ReminderHistoryScreen() {
   const { reminders, toggleReminder, deleteReminder } = useReminders();
@@ -142,20 +143,15 @@ export default function ReminderHistoryScreen() {
         keyExtractor={(item) => item.id}
         contentContainerStyle={{ padding: 24, flexGrow: 1 }}
         ListEmptyComponent={
-          <View className="flex-1 justify-center items-center pt-16">
-            <View
-              className="w-20 h-20 rounded-full justify-center items-center mb-6"
-              style={{ backgroundColor: colors.pastelPeach }}
-            >
-              <Ionicons name="checkmark-done-outline" size={48} color={colors.text} />
-            </View>
-            <Text className="text-xl font-bold" style={{ color: colors.text }}>No completed reminders</Text>
-            <Text className="text-base mt-2 text-center px-8" style={{ color: colors.textSecondary }}>
-              {filter === 'all'
+          <EmptyState
+            icon="checkmark-done-outline"
+            title="No completed reminders"
+            message={
+              filter === 'all'
                 ? 'Complete reminders to see them here'
-                : `No reminders completed ${filter === 'today' ? 'today' : `in the last ${filter}`}`}
-            </Text>
-          </View>
+                : `No reminders completed ${filter === 'today' ? 'today' : `in the last ${filter}`}`
+            }
+          />
         }
       />
     </View>

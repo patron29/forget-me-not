@@ -8,10 +8,11 @@ import { Ionicons } from '@expo/vector-icons';
 import { useReminders } from '../utils/ReminderContext';
 import { useTheme } from '../utils/ThemeContext';
 import ReminderItem from '../components/ReminderItem';
+import { EmptyState } from '../components/ui';
 
 export default function LocationsScreen() {
   const { reminders, toggleReminder, deleteReminder } = useReminders();
-  const { colors } = useTheme();
+  const { colors, elevation } = useTheme();
 
   const getLocationGroups = () => {
     const locationMap = new Map();
@@ -48,7 +49,7 @@ export default function LocationsScreen() {
   const LocationHeader = ({ location, activeCount, completedCount }) => (
     <View
       className="flex-row items-center justify-between p-4 rounded-xl mb-3"
-      style={{ backgroundColor: colors.surface, shadowColor: colors.text, shadowOpacity: 0.05, shadowRadius: 4, elevation: 2 }}
+      style={{ backgroundColor: colors.surface, ...elevation.sm }}
     >
       <View className="flex-row items-center flex-1 gap-3">
         <View
@@ -131,13 +132,11 @@ export default function LocationsScreen() {
         keyExtractor={(item) => item.locationName}
         contentContainerStyle={{ padding: 16, flexGrow: 1 }}
         ListEmptyComponent={
-          <View className="flex-1 justify-center items-center pt-24">
-            <Ionicons name="map-outline" size={80} color={colors.textMuted} />
-            <Text className="text-2xl font-bold mt-4" style={{ color: colors.textMuted }}>No locations yet</Text>
-            <Text className="text-base mt-2 text-center" style={{ color: colors.textLight }}>
-              Add reminders to see them grouped by location
-            </Text>
-          </View>
+          <EmptyState
+            icon="map-outline"
+            title="No locations yet"
+            message="Add reminders to see them grouped by location"
+          />
         }
       />
     </View>

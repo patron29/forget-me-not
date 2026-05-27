@@ -5,7 +5,7 @@ import {
   TouchableOpacity,
   ScrollView,
   ActivityIndicator,
-  Linking,
+  Alert,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -42,8 +42,12 @@ export default function PaywallScreen({ navigation }) {
     const packageToPurchase = selectedPlan === 'yearly' ? yearlyPackage : monthlyPackage;
 
     if (!packageToPurchase) {
-      // Demo mode - show success message
-      alert('Demo Mode: In production, this would initiate the purchase flow.');
+      // Demo mode (no RevenueCat offering configured). Use the RN Alert API —
+      // the web `alert()` global is undefined on native and would throw.
+      Alert.alert(
+        'Demo Mode',
+        'In production, this would initiate the purchase flow.'
+      );
       return;
     }
 

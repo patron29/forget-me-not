@@ -22,7 +22,7 @@ export default function SettingsScreen({ navigation }) {
     restorePurchases,
     isLoading,
   } = useSubscription();
-  const { themeMode, setTheme, isDark, colors } = useTheme();
+  const { themeMode, setTheme, isDark, colors, elevation } = useTheme();
 
   const appVersion = Constants.expoConfig?.version || '1.0.0';
 
@@ -190,7 +190,7 @@ export default function SettingsScreen({ navigation }) {
 
         {/* Appearance Section */}
         <SectionHeader title="Appearance" />
-        <View className="mx-4 rounded-xl overflow-hidden">
+        <View className="mx-4 rounded-xl overflow-hidden" style={{ borderWidth: 1, borderColor: colors.borderLight }}>
           <SettingsRow
             icon={isDark ? "moon" : "sunny"}
             title="Theme"
@@ -212,7 +212,7 @@ export default function SettingsScreen({ navigation }) {
 
         {/* Account Section */}
         <SectionHeader title="Account" />
-        <View className="mx-4 rounded-xl overflow-hidden">
+        <View className="mx-4 rounded-xl overflow-hidden" style={{ borderWidth: 1, borderColor: colors.borderLight }}>
           <SettingsRow
             icon="refresh"
             title="Restore Purchases"
@@ -224,7 +224,7 @@ export default function SettingsScreen({ navigation }) {
 
         {/* Support Section */}
         <SectionHeader title="Support" />
-        <View className="mx-4 rounded-xl overflow-hidden">
+        <View className="mx-4 rounded-xl overflow-hidden" style={{ borderWidth: 1, borderColor: colors.borderLight }}>
           <SettingsRow
             icon="mail-outline"
             title="Contact Support"
@@ -249,7 +249,7 @@ export default function SettingsScreen({ navigation }) {
 
         {/* Legal Section */}
         <SectionHeader title="Legal" />
-        <View className="mx-4 rounded-xl overflow-hidden">
+        <View className="mx-4 rounded-xl overflow-hidden" style={{ borderWidth: 1, borderColor: colors.borderLight }}>
           <SettingsRow
             icon="document-text-outline"
             title="Terms of Service"

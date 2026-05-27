@@ -1,8 +1,13 @@
-import React, { createContext, useContext, useState, useEffect } from 'react';
+import React, {
+  createContext,
+  useContext,
+  useState,
+  useEffect,
+  ReactNode,
+} from 'react';
 import { useColorScheme } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-
-const ThemeContext = createContext();
+import type { ThemeMode } from '../types';
 
 const THEME_STORAGE_KEY = 'app-theme-preference';
 
@@ -150,10 +155,16 @@ export const typography = {
   body: { fontSize: 15, fontWeight: '500' },
   caption: { fontSize: 13, fontWeight: '500' },
   overline: { fontSize: 11, fontWeight: '600', letterSpacing: 0.6, textTransform: 'uppercase' },
-};
+} as const;
+
+/** Every theme exposes the same colour keys; lightColors is the canonical shape. */
+export type ThemeColors = typeof lightColors;
+export type Spacing = typeof spacing;
+export type Radius = typeof radius;
+export type Typography = typeof typography;
 
 // Theme-aware elevation presets. Shadows read darker/softer in dark mode.
-export function getElevation(isDark) {
+export function getElevation(isDark: boolean) {
   const shadowColor = '#000';
   return {
     none: {},
@@ -181,9 +192,25 @@ export function getElevation(isDark) {
   };
 }
 
-export function ThemeProvider({ children }) {
+export type Elevation = ReturnType<typeof getElevation>;
+
+export interface ThemeContextValue {
+  themeMode: ThemeMode;
+  setTheme: (mode: ThemeMode) => Promise<void>;
+  isDark: boolean;
+  colors: ThemeColors;
+  isLoaded: boolean;
+  spacing: Spacing;
+  radius: Radius;
+  typography: Typography;
+  elevation: Elevation;
+}
+
+const ThemeContext = createContext<ThemeContextValue | undefined>(undefined);
+
+export function ThemeProvider({ children }: { children: ReactNode }) {
   const systemColorScheme = useColorScheme();
-  const [themeMode, setThemeMode] = useState('system'); // 'light' | 'dark' | 'system'
+  const [themeMode, setThemeMode] = useState<ThemeMode>('system');
   const [isLoaded, setIsLoaded] = useState(false);
 
   useEffect(() => {
@@ -194,7 +221,7 @@ export function ThemeProvider({ children }) {
     try {
       const savedTheme = await AsyncStorage.getItem(THEME_STORAGE_KEY);
       if (savedTheme) {
-        setThemeMode(savedTheme);
+        setThemeMode(savedTheme as ThemeMode);
       }
     } catch (error) {
       console.error('Error loading theme preference:', error);
@@ -203,7 +230,7 @@ export function ThemeProvider({ children }) {
     }
   };
 
-  const setTheme = async (mode) => {
+  const setTheme = async (mode: ThemeMode) => {
     try {
       setThemeMode(mode);
       await AsyncStorage.setItem(THEME_STORAGE_KEY, mode);
@@ -216,7 +243,7 @@ export function ThemeProvider({ children }) {
   const isDark = themeMode === 'dark' || (themeMode === 'system' && systemColorScheme === 'dark');
   const colors = isDark ? darkColors : lightColors;
 
-  const value = {
+  const value: ThemeContextValue = {
     themeMode,
     setTheme,
     isDark,

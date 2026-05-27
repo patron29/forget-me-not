@@ -179,7 +179,9 @@ export default function ReminderListScreen() {
           className="px-6 pb-5"
           style={{
             opacity: fadeAnim,
-            paddingTop: 10,
+            // Respect the status bar / Dynamic Island so the header doesn't
+            // collide with the system clock + notch.
+            paddingTop: insets.top + 10,
             backgroundColor: colors.background,
           }}
         >

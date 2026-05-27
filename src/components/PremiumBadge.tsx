@@ -1,10 +1,17 @@
 import React from 'react';
-import { View, Text, TouchableOpacity } from 'react-native';
+import { View, Text, TouchableOpacity, GestureResponderEvent } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '../utils/ThemeContext';
 
+// Ionicons glyph name — shared by the icon-bearing components below.
+type IoniconName = keyof typeof Ionicons.glyphMap;
+
+interface ProBadgeProps {
+  small?: boolean;
+}
+
 // PRO badge - shown next to premium features
-export function ProBadge({ small = false }) {
+export function ProBadge({ small = false }: ProBadgeProps) {
   const { colors } = useTheme();
 
   return (
@@ -26,8 +33,12 @@ export function ProBadge({ small = false }) {
   );
 }
 
+interface LockBadgeProps {
+  size?: number;
+}
+
 // Lock badge - shown on locked features for free users
-export function LockBadge({ size = 16 }) {
+export function LockBadge({ size = 16 }: LockBadgeProps) {
   const { colors, isDark } = useTheme();
 
   return (
@@ -44,8 +55,15 @@ export function LockBadge({ size = 16 }) {
   );
 }
 
+interface PremiumFeatureRowProps {
+  icon: IoniconName;
+  title: string;
+  description?: string;
+  included?: boolean;
+}
+
 // Premium feature row - used in paywall and settings
-export function PremiumFeatureRow({ icon, title, description, included = true }) {
+export function PremiumFeatureRow({ icon, title, description, included = true }: PremiumFeatureRowProps) {
   const { colors } = useTheme();
 
   return (
@@ -77,8 +95,14 @@ export function PremiumFeatureRow({ icon, title, description, included = true })
   );
 }
 
+interface UpgradeBannerProps {
+  onPress?: (event: GestureResponderEvent) => void;
+  message?: string;
+  compact?: boolean;
+}
+
 // Upgrade prompt banner
-export function UpgradeBanner({ onPress, message, compact = false }) {
+export function UpgradeBanner({ onPress, message, compact = false }: UpgradeBannerProps) {
   const { colors } = useTheme();
 
   return (
@@ -113,8 +137,14 @@ export function UpgradeBanner({ onPress, message, compact = false }) {
   );
 }
 
+interface PremiumLockedOverlayProps {
+  feature: string;
+  onUpgrade?: (event: GestureResponderEvent) => void;
+  onClose?: (event: GestureResponderEvent) => void;
+}
+
 // Premium locked overlay - shows when tapping a locked feature
-export function PremiumLockedOverlay({ feature, onUpgrade, onClose }) {
+export function PremiumLockedOverlay({ feature, onUpgrade, onClose }: PremiumLockedOverlayProps) {
   const { colors } = useTheme();
 
   return (

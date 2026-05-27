@@ -13,6 +13,7 @@ import {
 import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useNavigation } from '@react-navigation/native';
+import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { useReminders } from '../utils/ReminderContext';
 import { useSubscription, FREE_TIER_LIMITS } from '../utils/SubscriptionContext';
 import { useTheme } from '../utils/ThemeContext';
@@ -21,9 +22,12 @@ import ReminderItem from '../components/ReminderItem';
 import LocationPicker from '../components/LocationPicker';
 import { UpgradeBanner } from '../components/PremiumBadge';
 import { StatCard, EmptyState } from '../components/ui';
+import type { Reminder, LocationData, ReminderActionError } from '../types';
+import type { RootStackParamList } from '../navigation';
 
 export default function ReminderListScreen() {
-  const navigation = useNavigation();
+  const navigation =
+    useNavigation<NativeStackNavigationProp<RootStackParamList>>();
   const { reminders, addReminder, toggleReminder, deleteReminder, updateReminder, locationPermission } = useReminders();
   const { colors, isDark } = useTheme();
 
@@ -36,17 +40,17 @@ export default function ReminderListScreen() {
   }
   const isPremium = subscriptionContext?.isPremium || false;
 
-  const [inputText, setInputText] = useState('');
-  const [showLocationPicker, setShowLocationPicker] = useState(false);
-  const [editingReminder, setEditingReminder] = useState(null);
-  const [showEditTextModal, setShowEditTextModal] = useState(false);
-  const [editText, setEditText] = useState('');
-  const [editingTextReminder, setEditingTextReminder] = useState(null);
-  const fadeAnim = useRef(new Animated.Value(0)).current;
+  const [inputText, setInputText] = useState<string>('');
+  const [showLocationPicker, setShowLocationPicker] = useState<boolean>(false);
+  const [editingReminder, setEditingReminder] = useState<Reminder | null>(null);
+  const [showEditTextModal, setShowEditTextModal] = useState<boolean>(false);
+  const [editText, setEditText] = useState<string>('');
+  const [editingTextReminder, setEditingTextReminder] = useState<Reminder | null>(null);
+  const fadeAnim = useRef<Animated.Value>(new Animated.Value(0)).current;
   const insets = useSafeAreaInsets();
 
-  const activeReminders = reminders.filter(r => !r.completed);
-  const completedCount = reminders.filter(r => r.completed).length;
+  const activeReminders = reminders.filter((r: Reminder) => !r.completed);
+  const completedCount = reminders.filter((r: Reminder) => r.completed).length;
   const remainingReminders = isPremium ? Infinity : Math.max(0, FREE_TIER_LIMITS.MAX_REMINDERS - activeReminders.length);
   const isNearLimit = !isPremium && remainingReminders <= 2;
   const isAtLimit = !isPremium && remainingReminders === 0;
@@ -59,7 +63,7 @@ export default function ReminderListScreen() {
     }).start();
   }, []);
 
-  const handleVoiceInput = (text) => {
+  const handleVoiceInput = (text: string) => {
     setInputText(text);
   };
 
@@ -88,7 +92,7 @@ export default function ReminderListScreen() {
     setShowLocationPicker(true);
   };
 
-  const handleLocationSelect = async (location) => {
+  const handleLocationSelect = async (location: LocationData) => {
     try {
       if (editingReminder) {
         updateReminder(editingReminder.id, {
@@ -104,10 +108,10 @@ export default function ReminderListScreen() {
         });
         setEditingReminder(null);
       } else {
-        const result = await addReminder(inputText.trim(), location);
+        const result: Reminder | ReminderActionError = await addReminder(inputText.trim(), location);
 
         // Check if the result indicates an error (subscription limits)
-        if (result?.error) {
+        if (result && 'error' in result && result.error) {
           if (result.error === 'UPGRADE_REQUIRED' || result.error === 'PREMIUM_FEATURE') {
             Alert.alert(
               'Premium Feature',
@@ -132,7 +136,7 @@ export default function ReminderListScreen() {
     }
   };
 
-  const handleEditReminder = (reminder) => {
+  const handleEditReminder = (reminder: Reminder) => {
     Alert.alert(
       'Edit Reminder',
       'What would you like to edit?',

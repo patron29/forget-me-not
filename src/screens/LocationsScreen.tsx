@@ -9,15 +9,24 @@ import { useReminders } from '../utils/ReminderContext';
 import { useTheme } from '../utils/ThemeContext';
 import ReminderItem from '../components/ReminderItem';
 import { EmptyState } from '../components/ui';
+import type { Reminder, LocationData } from '../types';
+
+interface LocationGroup {
+  locationName: string;
+  location: LocationData;
+  reminders: Reminder[];
+  activeCount: number;
+  completedCount: number;
+}
 
 export default function LocationsScreen() {
   const { reminders, toggleReminder, deleteReminder } = useReminders();
   const { colors, elevation } = useTheme();
 
-  const getLocationGroups = () => {
-    const locationMap = new Map();
+  const getLocationGroups = (): LocationGroup[] => {
+    const locationMap = new Map<string, LocationGroup>();
 
-    reminders.forEach((reminder) => {
+    reminders.forEach((reminder: Reminder) => {
       const locationName = reminder.location.name;
       if (!locationMap.has(locationName)) {
         locationMap.set(locationName, {
@@ -29,7 +38,7 @@ export default function LocationsScreen() {
         });
       }
 
-      const group = locationMap.get(locationName);
+      const group = locationMap.get(locationName)!;
       group.reminders.push(reminder);
 
       if (reminder.completed) {
@@ -46,7 +55,15 @@ export default function LocationsScreen() {
 
   const locationGroups = getLocationGroups();
 
-  const LocationHeader = ({ location, activeCount, completedCount }) => (
+  const LocationHeader = ({
+    location,
+    activeCount,
+    completedCount,
+  }: {
+    location: LocationData;
+    activeCount: number;
+    completedCount: number;
+  }) => (
     <View
       className="flex-row items-center justify-between p-4 rounded-xl mb-3"
       style={{ backgroundColor: colors.surface, ...elevation.sm }}
@@ -88,7 +105,7 @@ export default function LocationsScreen() {
     </View>
   );
 
-  const renderLocationGroup = ({ item }) => (
+  const renderLocationGroup = ({ item }: { item: LocationGroup }) => (
     <View className="mb-6">
       <LocationHeader
         location={item.location}

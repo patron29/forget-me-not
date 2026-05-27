@@ -1,5 +1,5 @@
 import React from 'react';
-import { render } from '@testing-library/react-native';
+import { render, type RenderOptions } from '@testing-library/react-native';
 import { ThemeProvider } from './utils/ThemeContext';
 
 /**
@@ -7,7 +7,10 @@ import { ThemeProvider } from './utils/ThemeContext';
  * ReminderItem (and most components) call useTheme(), which throws
  * outside a ThemeProvider — so wrap everything here.
  */
-export function renderWithProviders(ui, options) {
+export function renderWithProviders(
+  ui: React.ReactElement,
+  options?: RenderOptions
+): ReturnType<typeof render> {
   return render(<ThemeProvider>{ui}</ThemeProvider>, options);
 }
 

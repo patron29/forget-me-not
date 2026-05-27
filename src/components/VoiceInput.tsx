@@ -7,6 +7,11 @@ import {
 } from 'expo-speech-recognition';
 import { useTheme } from '../utils/ThemeContext';
 
+interface VoiceInputProps {
+  /** Called with each (partial then final) transcript as the user speaks. */
+  onVoiceResult: (transcript: string) => void;
+}
+
 /**
  * Voice-to-text button. Uses the device's on-device speech recognizer
  * (iOS Speech framework / Android SpeechRecognizer) via
@@ -17,10 +22,10 @@ import { useTheme } from '../utils/ThemeContext';
  * running in plain Expo Go): the button explains that a dev/preview build
  * is required instead of silently failing.
  */
-export default function VoiceInput({ onVoiceResult }) {
-  const [isListening, setIsListening] = useState(false);
+export default function VoiceInput({ onVoiceResult }: VoiceInputProps) {
+  const [isListening, setIsListening] = useState<boolean>(false);
   const pulseAnim = useRef(new Animated.Value(1)).current;
-  const loopRef = useRef(null);
+  const loopRef = useRef<Animated.CompositeAnimation | null>(null);
   const { colors } = useTheme();
 
   const startPulse = useCallback(() => {

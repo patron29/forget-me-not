@@ -1,9 +1,25 @@
-import React, { createContext, useContext, useState, useEffect } from 'react';
+import React, {
+  createContext,
+  useContext,
+  useState,
+  useEffect,
+  ReactNode,
+} from 'react';
 import { Platform, Alert } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import Purchases from 'react-native-purchases';
+import Purchases, {
+  CustomerInfo,
+  PurchasesOffering,
+  PurchasesPackage,
+} from 'react-native-purchases';
+import type { SubscriptionStatus } from '../types';
 
-const SubscriptionContext = createContext();
+interface PurchaseResult {
+  success: boolean;
+  restored?: boolean;
+  cancelled?: boolean;
+  error?: unknown;
+}
 
 // RevenueCat API Keys - Replace with your actual keys from RevenueCat dashboard
 const REVENUECAT_API_KEY_IOS = 'your_ios_api_key_here';
@@ -28,12 +44,33 @@ export const FREE_TIER_LIMITS = {
   MULTI_LOCATION: false,
 };
 
-export function SubscriptionProvider({ children }) {
+export interface SubscriptionContextValue {
+  isPremium: boolean;
+  subscriptionStatus: SubscriptionStatus;
+  offerings: PurchasesOffering | null;
+  isLoading: boolean;
+  customerInfo: CustomerInfo | null;
+  checkSubscription: () => Promise<CustomerInfo | null>;
+  purchasePackage: (pkg: PurchasesPackage) => Promise<PurchaseResult>;
+  restorePurchases: () => Promise<PurchaseResult>;
+  canAddReminder: (currentActiveCount: number) => boolean;
+  canUseChainMode: () => boolean;
+  canUseMultiLocation: () => boolean;
+  getRemainingReminders: (currentActiveCount: number) => number;
+  FREE_TIER_LIMITS: typeof FREE_TIER_LIMITS;
+}
+
+const SubscriptionContext = createContext<SubscriptionContextValue | undefined>(
+  undefined
+);
+
+export function SubscriptionProvider({ children }: { children: ReactNode }) {
   const [isPremium, setIsPremium] = useState(false);
-  const [subscriptionStatus, setSubscriptionStatus] = useState('free'); // 'free' | 'monthly' | 'yearly'
-  const [offerings, setOfferings] = useState(null);
+  const [subscriptionStatus, setSubscriptionStatus] =
+    useState<SubscriptionStatus>('free');
+  const [offerings, setOfferings] = useState<PurchasesOffering | null>(null);
   const [isLoading, setIsLoading] = useState(true);
-  const [customerInfo, setCustomerInfo] = useState(null);
+  const [customerInfo, setCustomerInfo] = useState<CustomerInfo | null>(null);
 
   useEffect(() => {
     initializePurchases();
@@ -84,7 +121,10 @@ export function SubscriptionProvider({ children }) {
     }
   };
 
-  const cacheSubscriptionStatus = async (premium, status) => {
+  const cacheSubscriptionStatus = async (
+    premium: boolean,
+    status: SubscriptionStatus
+  ) => {
     try {
       await AsyncStorage.setItem(
         SUBSCRIPTION_STORAGE_KEY,
@@ -95,13 +135,13 @@ export function SubscriptionProvider({ children }) {
     }
   };
 
-  const handleCustomerInfoUpdate = (info) => {
+  const handleCustomerInfoUpdate = (info: CustomerInfo) => {
     const premium = info.entitlements.active[ENTITLEMENT_ID] !== undefined;
     setIsPremium(premium);
     setCustomerInfo(info);
 
     // Determine subscription type
-    let status = 'free';
+    let status: SubscriptionStatus = 'free';
     if (premium) {
       const entitlement = info.entitlements.active[ENTITLEMENT_ID];
       if (entitlement?.productIdentifier?.includes('yearly')) {
@@ -136,16 +176,19 @@ export function SubscriptionProvider({ children }) {
     }
   };
 
-  const purchasePackage = async (packageToPurchase) => {
+  const purchasePackage = async (
+    packageToPurchase: PurchasesPackage
+  ): Promise<PurchaseResult> => {
     try {
       setIsLoading(true);
       const { customerInfo } = await Purchases.purchasePackage(packageToPurchase);
       handleCustomerInfoUpdate(customerInfo);
       return { success: true };
     } catch (error) {
-      if (!error.userCancelled) {
+      const err = error as { userCancelled?: boolean; message?: string };
+      if (!err.userCancelled) {
         console.error('[Subscription] Purchase error:', error);
-        Alert.alert('Purchase Failed', error.message || 'Unable to complete purchase. Please try again.');
+        Alert.alert('Purchase Failed', err.message || 'Unable to complete purchase. Please try again.');
         return { success: false, error };
       }
       return { success: false, cancelled: true };
@@ -154,7 +197,7 @@ export function SubscriptionProvider({ children }) {
     }
   };
 
-  const restorePurchases = async () => {
+  const restorePurchases = async (): Promise<PurchaseResult> => {
     try {
       setIsLoading(true);
       const info = await Purchases.restorePurchases();
@@ -177,7 +220,7 @@ export function SubscriptionProvider({ children }) {
   };
 
   // Check if user can add more reminders
-  const canAddReminder = (currentActiveCount) => {
+  const canAddReminder = (currentActiveCount: number) => {
     if (isPremium) return true;
     return currentActiveCount < FREE_TIER_LIMITS.MAX_REMINDERS;
   };
@@ -193,12 +236,12 @@ export function SubscriptionProvider({ children }) {
   };
 
   // Get remaining reminders for free users
-  const getRemainingReminders = (currentActiveCount) => {
+  const getRemainingReminders = (currentActiveCount: number) => {
     if (isPremium) return Infinity;
     return Math.max(0, FREE_TIER_LIMITS.MAX_REMINDERS - currentActiveCount);
   };
 
-  const value = {
+  const value: SubscriptionContextValue = {
     // State
     isPremium,
     subscriptionStatus,

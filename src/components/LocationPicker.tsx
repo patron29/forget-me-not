@@ -9,20 +9,38 @@ import {
   ScrollView,
   Alert,
 } from 'react-native';
+import type { TextStyle } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import * as Location from 'expo-location';
 import { useNavigation } from '@react-navigation/native';
 import { autocompleteSearch } from '../services/placesService';
+import type { PlaceResult } from '../services/placesService';
 import { useSubscription } from '../utils/SubscriptionContext';
 import { useTheme } from '../utils/ThemeContext';
 import { ProBadge, LockBadge } from './PremiumBadge';
+import type { LocationData } from '../types';
 
-export default function LocationPicker({ visible, onClose, onLocationSelect }) {
-  const navigation = useNavigation();
+interface LocationPickerProps {
+  visible: boolean;
+  onClose: () => void;
+  onLocationSelect: (location: LocationData) => void;
+}
+
+/** A single location row the user has selected within the picker. */
+interface SelectedLocation {
+  id: string;
+  name: string;
+  address: string;
+  latitude: number;
+  longitude: number;
+}
+
+export default function LocationPicker({ visible, onClose, onLocationSelect }: LocationPickerProps) {
+  const navigation = useNavigation<any>();
   const { colors, isDark } = useTheme();
 
   // Get subscription status
-  let subscriptionContext = null;
+  let subscriptionContext: ReturnType<typeof useSubscription> | null = null;
   try {
     subscriptionContext = useSubscription();
   } catch (e) {
@@ -30,21 +48,21 @@ export default function LocationPicker({ visible, onClose, onLocationSelect }) {
   }
   const isPremium = subscriptionContext?.isPremium || false;
 
-  const [isChainMode, setIsChainMode] = useState(false);
-  const [locationName, setLocationName] = useState('');
-  const [address, setAddress] = useState('');
-  const [currentLocation, setCurrentLocation] = useState(null);
-  const [loading, setLoading] = useState(false);
+  const [isChainMode, setIsChainMode] = useState<boolean>(false);
+  const [locationName, setLocationName] = useState<string>('');
+  const [address, setAddress] = useState<string>('');
+  const [currentLocation, setCurrentLocation] = useState<Location.LocationObjectCoords | null>(null);
+  const [loading, setLoading] = useState<boolean>(false);
   const FIXED_RADIUS = 100;
 
-  const [locations, setLocations] = useState([]);
-  const [addressSearchQuery, setAddressSearchQuery] = useState('');
-  const [addressSearchResults, setAddressSearchResults] = useState([]);
-  const [searchingAddresses, setSearchingAddresses] = useState(false);
-  const [useImperial, setUseImperial] = useState(false);
+  const [locations, setLocations] = useState<SelectedLocation[]>([]);
+  const [addressSearchQuery, setAddressSearchQuery] = useState<string>('');
+  const [addressSearchResults, setAddressSearchResults] = useState<PlaceResult[]>([]);
+  const [searchingAddresses, setSearchingAddresses] = useState<boolean>(false);
+  const [useImperial, setUseImperial] = useState<boolean>(false);
 
-  const isMountedRef = useRef(true);
-  const searchTimeoutRef = useRef(null);
+  const isMountedRef = useRef<boolean>(true);
+  const searchTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(() => {
     isMountedRef.current = true;
@@ -59,7 +77,11 @@ export default function LocationPicker({ visible, onClose, onLocationSelect }) {
   useEffect(() => {
     const detectLocale = async () => {
       try {
-        const locales = await Location.getLocalizationAsync();
+        // getLocalizationAsync is available at runtime but missing from this
+        // version's type defs; access it via an untyped view of the module.
+        const locales = await (Location as unknown as {
+          getLocalizationAsync: () => Promise<{ region?: string | null }>;
+        }).getLocalizationAsync();
         const imperialCountries = ['US', 'GB', 'LR', 'MM'];
         const isImperial = imperialCountries.includes(locales.region || '');
         setUseImperial(isImperial);
@@ -126,7 +148,7 @@ export default function LocationPicker({ visible, onClose, onLocationSelect }) {
     };
   }, [addressSearchQuery, currentLocation]);
 
-  const handleSelectAddress = (place) => {
+  const handleSelectAddress = (place: PlaceResult) => {
     if (isChainMode) {
       const businessName = place.name.split(' - ')[0].split(' (')[0].trim();
       setLocationName(businessName);
@@ -156,12 +178,13 @@ export default function LocationPicker({ visible, onClose, onLocationSelect }) {
       return;
     }
 
-    const newLocation = {
+    const newLocation: SelectedLocation = {
       id: `${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
       name: place.name,
       address: place.address,
-      latitude: place.latitude,
-      longitude: place.longitude,
+      // autocompleteSearch only returns places with resolved coordinates.
+      latitude: place.latitude as number,
+      longitude: place.longitude as number,
     };
 
     const exists = locations.some(
@@ -180,11 +203,11 @@ export default function LocationPicker({ visible, onClose, onLocationSelect }) {
     }
   };
 
-  const handleRemoveLocation = (locationId) => {
+  const handleRemoveLocation = (locationId: string) => {
     setLocations(prev => prev.filter(loc => loc.id !== locationId));
   };
 
-  const locationCancelledRef = useRef(false);
+  const locationCancelledRef = useRef<boolean>(false);
 
   const handleCancelLocation = () => {
     locationCancelledRef.current = true;
@@ -265,7 +288,7 @@ export default function LocationPicker({ visible, onClose, onLocationSelect }) {
             .filter(Boolean)
             .join(', ');
 
-          const newLocation = {
+          const newLocation: SelectedLocation = {
             id: `${Date.now()}-${Math.random().toString(36).substring(2, 11)}`,
             name: place.name || 'Current Location',
             address: addressText,
@@ -310,12 +333,14 @@ export default function LocationPicker({ visible, onClose, onLocationSelect }) {
     }
 
     if (isChainMode) {
+      // Chain mode has no fixed coordinates — it triggers at ANY location of
+      // the business, so latitude/longitude are intentionally omitted.
       onLocationSelect({
         name: locationName.trim(),
         address: 'Any location',
         isChain: true,
         radius: FIXED_RADIUS,
-      });
+      } as LocationData);
     } else {
       if (locations.length === 0) {
         Alert.alert('Error', 'Please select at least one location');
@@ -329,13 +354,14 @@ export default function LocationPicker({ visible, onClose, onLocationSelect }) {
         address: locations[0].address,
         latitude: locations[0].latitude,
         longitude: locations[0].longitude,
+        // Each selected location carries an extra `id` used by the UI list.
         locations: locations.map(loc => ({
           id: loc.id,
           name: loc.name,
           address: loc.address,
           latitude: loc.latitude,
           longitude: loc.longitude,
-        })),
+        })) as unknown as LocationData[],
       });
     }
 
@@ -443,6 +469,8 @@ export default function LocationPicker({ visible, onClose, onLocationSelect }) {
                 </Text>
                 <TextInput
                   className="p-4 text-base"
+                  // outlineStyle is a web-only prop (removes the focus ring on
+                  // react-native-web); cast past RN's native TextStyle type.
                   style={{
                     backgroundColor: colors.surfaceGray,
                     color: colors.text,
@@ -450,7 +478,7 @@ export default function LocationPicker({ visible, onClose, onLocationSelect }) {
                     borderColor: colors.border,
                     borderRadius: 8,
                     outlineStyle: 'none',
-                  }}
+                  } as unknown as TextStyle}
                   placeholder="e.g., Grocery Store, Gym, Office"
                   placeholderTextColor={colors.textMuted}
                   value={locationName}
@@ -466,6 +494,8 @@ export default function LocationPicker({ visible, onClose, onLocationSelect }) {
 
             <TextInput
               className="p-4 text-base"
+              // outlineStyle is a web-only prop (removes the focus ring on
+              // react-native-web); cast past RN's native TextStyle type.
               style={{
                 backgroundColor: colors.surfaceGray,
                 color: colors.text,
@@ -473,7 +503,7 @@ export default function LocationPicker({ visible, onClose, onLocationSelect }) {
                 borderColor: colors.border,
                 borderRadius: 8,
                 outlineStyle: 'none',
-              }}
+              } as unknown as TextStyle}
               placeholder={isChainMode ? "Search for a business (e.g., pharmacy, gym)" : "Search for an address or place"}
               placeholderTextColor={colors.textMuted}
               value={addressSearchQuery}

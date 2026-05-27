@@ -13,8 +13,17 @@ import { useSubscription } from '../utils/SubscriptionContext';
 import { useTheme } from '../utils/ThemeContext';
 import { ProBadge } from '../components/PremiumBadge';
 import Constants from 'expo-constants';
+import type { ComponentProps, ReactNode } from 'react';
+import type { ThemeMode } from '../types';
 
-export default function SettingsScreen({ navigation }) {
+// SettingsScreen lives in the bottom-tab navigator under `Main`, but it
+// navigates to root-stack routes (Terms/Privacy/Paywall). Those route names
+// all exist on the root param list, so the loosely-composed navigation prop is
+// fine here; we keep it typed via the root stack props.
+type IoniconName = ComponentProps<typeof Ionicons>['name'];
+
+export default function SettingsScreen({ navigation }: { navigation: any }) {
+  // TODO: type with navigation param list (tab + parent stack composite)
   const insets = useSafeAreaInsets();
   const {
     isPremium,
@@ -26,7 +35,7 @@ export default function SettingsScreen({ navigation }) {
 
   const appVersion = Constants.expoConfig?.version || '1.0.0';
 
-  const getThemeLabel = () => {
+  const getThemeLabel = (): string => {
     switch (themeMode) {
       case 'light': return 'Light';
       case 'dark': return 'Dark';
@@ -35,7 +44,7 @@ export default function SettingsScreen({ navigation }) {
   };
 
   const cycleTheme = () => {
-    const modes = ['system', 'light', 'dark'];
+    const modes: ThemeMode[] = ['system', 'light', 'dark'];
     const currentIndex = modes.indexOf(themeMode);
     const nextIndex = (currentIndex + 1) % modes.length;
     setTheme(modes[nextIndex]);
@@ -66,7 +75,21 @@ export default function SettingsScreen({ navigation }) {
     Linking.openURL('mailto:support@forgetmenot.app'); // Replace with your support email
   };
 
-  const SettingsRow = ({ icon, title, subtitle, onPress, rightElement, showChevron = true }) => (
+  const SettingsRow = ({
+    icon,
+    title,
+    subtitle,
+    onPress,
+    rightElement,
+    showChevron = true,
+  }: {
+    icon: IoniconName;
+    title: string;
+    subtitle?: string;
+    onPress?: () => void;
+    rightElement?: ReactNode;
+    showChevron?: boolean;
+  }) => (
     <TouchableOpacity
       className="flex-row items-center py-4 px-4"
       style={{ backgroundColor: colors.surface }}
@@ -93,7 +116,7 @@ export default function SettingsScreen({ navigation }) {
     </TouchableOpacity>
   );
 
-  const SectionHeader = ({ title }) => (
+  const SectionHeader = ({ title }: { title: string }) => (
     <Text
       className="text-sm font-semibold uppercase tracking-wide px-4 pt-6 pb-2"
       style={{ color: colors.textSecondary }}

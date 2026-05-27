@@ -3,8 +3,9 @@ import { View, Text, ScrollView, TouchableOpacity } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useTheme } from '../utils/ThemeContext';
+import type { RootStackScreenProps } from '../navigation';
 
-export default function TermsScreen({ navigation }) {
+export default function TermsScreen({ navigation }: RootStackScreenProps<'Terms'>) {
   const insets = useSafeAreaInsets();
   const { colors } = useTheme();
 

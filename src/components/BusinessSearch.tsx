@@ -10,12 +10,30 @@ import {
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { searchBusinessChains, POPULAR_CHAINS } from '../services/placesService';
+import type { ChainSearchResult } from '../services/placesService';
 
-export default function BusinessSearch({ visible, onClose, onSelectBusiness }) {
-  const [searchQuery, setSearchQuery] = useState('');
-  const [searchResults, setSearchResults] = useState([]);
-  const [loading, setLoading] = useState(false);
-  const [showingCategory, setShowingCategory] = useState(null);
+interface BusinessSearchProps {
+  visible: boolean;
+  onClose: () => void;
+  onSelectBusiness: (name: string) => void;
+}
+
+/**
+ * Display shape for a business row. Covers the union members returned by
+ * {@link searchBusinessChains} (popular chains carry `categoryGroup`, API
+ * results carry `category`).
+ */
+type BusinessItem = ChainSearchResult & {
+  categoryGroup?: string;
+  category?: string;
+  source?: 'popular' | 'api';
+};
+
+export default function BusinessSearch({ visible, onClose, onSelectBusiness }: BusinessSearchProps) {
+  const [searchQuery, setSearchQuery] = useState<string>('');
+  const [searchResults, setSearchResults] = useState<BusinessItem[]>([]);
+  const [loading, setLoading] = useState<boolean>(false);
+  const [showingCategory, setShowingCategory] = useState<string | null>(null);
 
   useEffect(() => {
     if (visible && !searchQuery) {
@@ -34,7 +52,7 @@ export default function BusinessSearch({ visible, onClose, onSelectBusiness }) {
   }, [searchQuery]);
 
   const loadAllPopularChains = () => {
-    const allChains = [];
+    const allChains: BusinessItem[] = [];
     Object.entries(POPULAR_CHAINS).forEach(([category, chains]) => {
       chains.forEach(chain => {
         allChains.push({ ...chain, categoryGroup: category });
@@ -55,7 +73,7 @@ export default function BusinessSearch({ visible, onClose, onSelectBusiness }) {
     }
   };
 
-  const handleSelectBusiness = (business) => {
+  const handleSelectBusiness = (business: BusinessItem) => {
     onSelectBusiness(business.name);
     handleClose();
   };
@@ -67,7 +85,7 @@ export default function BusinessSearch({ visible, onClose, onSelectBusiness }) {
     onClose();
   };
 
-  const renderBusinessItem = ({ item }) => (
+  const renderBusinessItem = ({ item }: { item: BusinessItem }) => (
     <TouchableOpacity
       className="flex-row items-center p-4 bg-white rounded-lg mb-2 border border-border"
       onPress={() => handleSelectBusiness(item)}
@@ -87,7 +105,7 @@ export default function BusinessSearch({ visible, onClose, onSelectBusiness }) {
     </TouchableOpacity>
   );
 
-  const renderCategoryButton = (categoryName) => (
+  const renderCategoryButton = (categoryName: string) => (
     <TouchableOpacity
       key={categoryName}
       className="flex-row justify-between items-center bg-pastel-purple p-6 rounded-lg mb-2"

@@ -4,12 +4,27 @@ import {
   Text,
   TouchableOpacity,
   Alert,
+  AlertButton,
   Animated,
   PanResponder,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import * as Speech from 'expo-speech';
 import { useTheme } from '../utils/ThemeContext';
+import type { Reminder } from '../types';
+
+interface ReminderItemProps {
+  reminder: Reminder;
+  /** Toggle the reminder's completed state. Wired to both TouchableOpacity
+   * onPress and an Alert button, so it must ignore any passed event arg. */
+  onToggle: () => void;
+  /** Delete this reminder. */
+  onDelete: () => void;
+  /** Open the editor for this reminder. Omitted where editing isn't allowed. */
+  onEdit?: (reminder: Reminder) => void;
+  showCompletedDate?: boolean;
+  showDate?: boolean;
+}
 
 export default function ReminderItem({
   reminder,
@@ -18,7 +33,7 @@ export default function ReminderItem({
   onEdit,
   showCompletedDate = false,
   showDate = false,
-}) {
+}: ReminderItemProps) {
   const translateX = useRef(new Animated.Value(0)).current;
   const scale = useRef(new Animated.Value(1)).current;
   const { colors, isDark } = useTheme();
@@ -118,7 +133,7 @@ export default function ReminderItem({
       useNativeDriver: true,
     }).start();
 
-    const options = [
+    const options: AlertButton[] = [
       { text: 'Cancel', style: 'cancel' },
     ];
 
@@ -166,7 +181,7 @@ export default function ReminderItem({
     }
   };
 
-  const formatDate = (dateString) => {
+  const formatDate = (dateString: string) => {
     const date = new Date(dateString);
     return date.toLocaleDateString('en-US', {
       month: 'short',

@@ -11,21 +11,24 @@ import { useReminders } from '../utils/ReminderContext';
 import { useTheme } from '../utils/ThemeContext';
 import ReminderItem from '../components/ReminderItem';
 import { EmptyState } from '../components/ui';
+import type { Reminder } from '../types';
+
+type HistoryFilter = 'all' | 'today' | 'week' | 'month';
 
 export default function ReminderHistoryScreen() {
   const { reminders, toggleReminder, deleteReminder } = useReminders();
   const { colors, isDark } = useTheme();
-  const [filter, setFilter] = useState('all');
+  const [filter, setFilter] = useState<HistoryFilter>('all');
 
-  const completedReminders = reminders.filter(r => r.completed);
+  const completedReminders = reminders.filter((r: Reminder) => r.completed);
 
-  const getFilteredReminders = () => {
+  const getFilteredReminders = (): Reminder[] => {
     const now = new Date();
     const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
     const weekAgo = new Date(today.getTime() - 7 * 24 * 60 * 60 * 1000);
     const monthAgo = new Date(today.getTime() - 30 * 24 * 60 * 60 * 1000);
 
-    return completedReminders.filter((reminder) => {
+    return completedReminders.filter((reminder: Reminder) => {
       // Guard against completed reminders that never got a completedAt
       // timestamp (e.g. legacy data, or toggled state) — an Invalid Date
       // silently fails every comparison and the item vanishes from filters.
@@ -59,14 +62,14 @@ export default function ReminderHistoryScreen() {
           text: 'Delete',
           style: 'destructive',
           onPress: () => {
-            completedReminders.forEach((reminder) => deleteReminder(reminder.id));
+            completedReminders.forEach((reminder: Reminder) => deleteReminder(reminder.id));
           },
         },
       ]
     );
   };
 
-  const FilterButton = ({ label, value }) => (
+  const FilterButton = ({ label, value }: { label: string; value: HistoryFilter }) => (
     <TouchableOpacity
       className="px-4 py-2 rounded-full"
       style={{

@@ -6,13 +6,17 @@
  * migration has a single source of truth to import from.
  */
 
+/** One physical place. Used both standalone and as an entry in a
+ *  multi-location reminder (where it may carry a UI-only id and omit radius). */
 export interface LocationData {
+  id?: string;
   name: string;
   address?: string;
   latitude: number;
   longitude: number;
-  /** Trigger radius in metres. */
-  radius: number;
+  /** Trigger radius in metres. Optional on sub-locations; the reminder's
+   *  top-level location always sets it (defaulting to 100m). */
+  radius?: number;
   /** Chain/franchise mode — trigger at ANY location of this business. */
   isChain?: boolean;
   /** Optional multi-location list for a single reminder. */
@@ -43,4 +47,6 @@ export type SubscriptionStatus = 'free' | 'monthly' | 'yearly';
 export interface ReminderActionError {
   error: 'UPGRADE_REQUIRED' | 'PREMIUM_FEATURE';
   message: string;
+  /** Which premium feature was gated, when error === 'PREMIUM_FEATURE'. */
+  feature?: 'chain_mode' | 'multi_location';
 }

@@ -1,7 +1,20 @@
-import React from 'react';
-import { View, Text, TouchableOpacity, Animated } from 'react-native';
+import React, { ReactNode } from 'react';
+import {
+  View,
+  Text,
+  TouchableOpacity,
+  Animated,
+  StyleProp,
+  ViewStyle,
+  GestureResponderEvent,
+  ViewProps,
+} from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '../../utils/ThemeContext';
+import type { ThemeColors, Elevation } from '../../utils/ThemeContext';
+
+// Ionicons glyph name — shared by the icon-bearing primitives below.
+type IoniconName = keyof typeof Ionicons.glyphMap;
 
 /**
  * Shared UI primitives built on the theme's design tokens (spacing / radius /
@@ -10,8 +23,15 @@ import { useTheme } from '../../utils/ThemeContext';
  * makes future visual changes a one-file edit.
  */
 
+interface CardProps extends ViewProps {
+  children?: ReactNode;
+  style?: StyleProp<ViewStyle>;
+  elevation?: keyof Elevation;
+  padded?: boolean;
+}
+
 // Elevated surface card.
-export function Card({ children, style, elevation = 'sm', padded = true, ...rest }) {
+export function Card({ children, style, elevation = 'sm', padded = true, ...rest }: CardProps) {
   const { colors, radius, spacing, elevation: el } = useTheme();
   return (
     <View
@@ -33,8 +53,16 @@ export function Card({ children, style, elevation = 'sm', padded = true, ...rest
   );
 }
 
+interface ScreenHeaderProps {
+  title: string;
+  subtitle?: string;
+  icon?: ReactNode;
+  right?: ReactNode;
+  style?: StyleProp<ViewStyle>;
+}
+
 // Screen header: optional logo/icon, title, subtitle, and right-side slot.
-export function ScreenHeader({ title, subtitle, icon, right, style }) {
+export function ScreenHeader({ title, subtitle, icon, right, style }: ScreenHeaderProps) {
   const { colors, spacing, typography } = useTheme();
   return (
     <View
@@ -62,10 +90,19 @@ export function ScreenHeader({ title, subtitle, icon, right, style }) {
   );
 }
 
+type StatCardTone = 'neutral' | 'primary' | 'warning' | 'danger';
+
+interface StatCardProps {
+  value: ReactNode;
+  label: string;
+  tone?: StatCardTone;
+  style?: StyleProp<ViewStyle>;
+}
+
 // Compact statistic tile (the "Active" / "Completed" counters).
-export function StatCard({ value, label, tone = 'neutral', style }) {
+export function StatCard({ value, label, tone = 'neutral', style }: StatCardProps) {
   const { colors, radius, spacing, typography } = useTheme();
-  const tones = {
+  const tones: Record<StatCardTone, { bg: string; border: string; fg: string; label: string }> = {
     neutral: { bg: colors.surfaceGray, border: colors.border, fg: colors.text, label: colors.textMuted },
     primary: { bg: colors.primaryLight, border: colors.primary, fg: colors.primary, label: colors.primary },
     warning: { bg: colors.warningLight, border: colors.warning, fg: colors.warning, label: colors.warning },
@@ -94,8 +131,15 @@ export function StatCard({ value, label, tone = 'neutral', style }) {
   );
 }
 
+interface EmptyStateProps {
+  icon?: IoniconName;
+  title?: string;
+  message?: string;
+  hint?: string;
+}
+
 // Centered empty-state with icon, title, message and optional hint chip.
-export function EmptyState({ icon = 'sparkles-outline', title, message, hint }) {
+export function EmptyState({ icon = 'sparkles-outline', title, message, hint }: EmptyStateProps) {
   const { colors, radius, spacing, typography } = useTheme();
   return (
     <View style={{ alignItems: 'center', justifyContent: 'center', paddingVertical: spacing.xxl, paddingHorizontal: spacing.xl }}>
@@ -132,8 +176,18 @@ export function EmptyState({ icon = 'sparkles-outline', title, message, hint }) 
   );
 }
 
+interface PrimaryButtonProps {
+  label: string;
+  onPress?: (event: GestureResponderEvent) => void;
+  icon?: IoniconName;
+  disabled?: boolean;
+  style?: StyleProp<ViewStyle>;
+  /** Theme colour key used as the button background (e.g. 'primary', 'danger'). */
+  tone?: keyof ThemeColors;
+}
+
 // Filled primary action button.
-export function PrimaryButton({ label, onPress, icon, disabled, style, tone = 'primary' }) {
+export function PrimaryButton({ label, onPress, icon, disabled, style, tone = 'primary' }: PrimaryButtonProps) {
   const { colors, radius, spacing, typography, elevation } = useTheme();
   const bg = disabled ? colors.surfaceGray : colors[tone] || colors.primary;
   const fg = disabled ? colors.textMuted : '#FFFFFF';

@@ -12,8 +12,11 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useSubscription, PRODUCT_IDS } from '../utils/SubscriptionContext';
 import { useTheme } from '../utils/ThemeContext';
 import { PremiumFeatureRow } from '../components/PremiumBadge';
+import type { RootStackScreenProps } from '../navigation';
 
-export default function PaywallScreen({ navigation }) {
+type PlanType = 'monthly' | 'yearly';
+
+export default function PaywallScreen({ navigation }: RootStackScreenProps<'Paywall'>) {
   const insets = useSafeAreaInsets();
   const { colors, isDark } = useTheme();
   const {
@@ -24,13 +27,13 @@ export default function PaywallScreen({ navigation }) {
     isPremium,
   } = useSubscription();
 
-  const [selectedPlan, setSelectedPlan] = useState('yearly');
+  const [selectedPlan, setSelectedPlan] = useState<PlanType>('yearly');
 
   const monthlyPackage = offerings?.availablePackages?.find(
-    (pkg) => pkg.product?.identifier === PRODUCT_IDS.MONTHLY
+    (pkg: any) => pkg.product?.identifier === PRODUCT_IDS.MONTHLY
   );
   const yearlyPackage = offerings?.availablePackages?.find(
-    (pkg) => pkg.product?.identifier === PRODUCT_IDS.YEARLY
+    (pkg: any) => pkg.product?.identifier === PRODUCT_IDS.YEARLY
   );
 
   // Fallback prices if offerings not loaded

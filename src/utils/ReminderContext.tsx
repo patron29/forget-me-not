@@ -1,26 +1,76 @@
-import React, { createContext, useState, useEffect, useContext } from 'react';
+import React, {
+  createContext,
+  useState,
+  useEffect,
+  useContext,
+  ReactNode,
+} from 'react';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as Location from 'expo-location';
 import * as Notifications from 'expo-notifications';
 import * as TaskManager from 'expo-task-manager';
 import { checkChainProximity } from '../services/placesService';
 import { useSubscription, FREE_TIER_LIMITS } from './SubscriptionContext';
+import type { Reminder, LocationData, ReminderActionError } from '../types';
 
 const LOCATION_TASK_NAME = 'background-location-task';
-const ReminderContext = createContext();
+
+type LocationPermissionState = 'full' | 'foreground' | 'denied' | null;
+
+/** A coordinate pair, the minimum needed for proximity checks. */
+interface Coords {
+  latitude: number;
+  longitude: number;
+}
+
+/** Location-or-error result returned by addReminder. */
+type AddReminderResult = Reminder | ReminderActionError;
+
+export interface ReminderContextValue {
+  reminders: Reminder[];
+  addReminder: (
+    text: string,
+    location: LocationData
+  ) => Promise<AddReminderResult>;
+  toggleReminder: (id: string) => void;
+  deleteReminder: (id: string) => void;
+  updateReminder: (id: string, updates: Partial<Reminder>) => void;
+  getActiveReminders: () => Reminder[];
+  getCompletedReminders: () => Reminder[];
+  getRemindersByLocation: (locationName: string) => Reminder[];
+  checkProximity: (currentLocation: Coords) => Promise<void>;
+  locationPermission: LocationPermissionState;
+  isPremium: boolean;
+  getReminderUsage: () => {
+    active: number;
+    limit: number;
+    remaining: number;
+    isPremium: boolean;
+  };
+  canAddReminder: () => boolean;
+}
+
+const ReminderContext = createContext<ReminderContextValue | undefined>(
+  undefined
+);
 
 // Configure notification handler
 Notifications.setNotificationHandler({
   handleNotification: async () => ({
+    // shouldShowAlert is deprecated; shouldShowBanner/List are the current
+    // fields. Keep all three so behavior is correct across SDK versions.
     shouldShowAlert: true,
+    shouldShowBanner: true,
+    shouldShowList: true,
     shouldPlaySound: true,
     shouldSetBadge: false,
   }),
 });
 
-export const ReminderProvider = ({ children }) => {
-  const [reminders, setReminders] = useState([]);
-  const [locationPermission, setLocationPermission] = useState(null);
+export const ReminderProvider = ({ children }: { children: ReactNode }) => {
+  const [reminders, setReminders] = useState<Reminder[]>([]);
+  const [locationPermission, setLocationPermission] =
+    useState<LocationPermissionState>(null);
   const [isLoaded, setIsLoaded] = useState(false);
   const [isGeofencingActive, setIsGeofencingActive] = useState(false);
 
@@ -85,7 +135,10 @@ export const ReminderProvider = ({ children }) => {
     }
   };
 
-  const addReminder = async (text, location) => {
+  const addReminder = async (
+    text: string,
+    location: LocationData
+  ): Promise<AddReminderResult> => {
     // Check subscription limits for free users
     const activeReminders = reminders.filter(r => !r.completed);
     if (!isPremium && activeReminders.length >= FREE_TIER_LIMITS.MAX_REMINDERS) {
@@ -170,14 +223,14 @@ export const ReminderProvider = ({ children }) => {
     }
   };
 
-  const checkProximity = async (currentLocation) => {
+  const checkProximity = async (currentLocation: Coords) => {
     try {
       const activeReminders = reminders.filter(r => !r.completed);
-      const remindersToUpdate = [];
+      const remindersToUpdate: string[] = [];
 
       for (const reminder of activeReminders) {
         let shouldTrigger = false;
-        let matchedLocation = null;
+        let matchedLocation: Partial<LocationData> | null = null;
 
         // Chain mode: Check for nearby chain locations
         if (reminder.location.isChain) {
@@ -210,7 +263,7 @@ export const ReminderProvider = ({ children }) => {
               loc.longitude
             );
 
-            if (distance <= reminder.location.radius) {
+            if (distance <= (reminder.location.radius ?? 100)) {
               shouldTrigger = true;
               matchedLocation = loc;
               break; // Found a matching location, no need to check others
@@ -251,7 +304,10 @@ export const ReminderProvider = ({ children }) => {
     }
   };
 
-  const sendNotification = async (reminder, matchedLocation = null) => {
+  const sendNotification = async (
+    reminder: Reminder,
+    matchedLocation: Partial<LocationData> | null = null
+  ) => {
     try {
       let locationText = reminder.location.name;
 
@@ -277,7 +333,12 @@ export const ReminderProvider = ({ children }) => {
     }
   };
 
-  const calculateDistance = (lat1, lon1, lat2, lon2) => {
+  const calculateDistance = (
+    lat1: number,
+    lon1: number,
+    lat2: number,
+    lon2: number
+  ) => {
     // Haversine formula to calculate distance between two coordinates
     const R = 6371e3; // Earth's radius in meters
     const φ1 = (lat1 * Math.PI) / 180;
@@ -293,7 +354,7 @@ export const ReminderProvider = ({ children }) => {
     return R * c; // Distance in meters
   };
 
-  const toggleReminder = (id) => {
+  const toggleReminder = (id: string) => {
     setReminders(prevReminders =>
       prevReminders.map((reminder) =>
         reminder.id === id
@@ -307,11 +368,11 @@ export const ReminderProvider = ({ children }) => {
     );
   };
 
-  const deleteReminder = (id) => {
+  const deleteReminder = (id: string) => {
     setReminders(prevReminders => prevReminders.filter((reminder) => reminder.id !== id));
   };
 
-  const updateReminder = (id, updates) => {
+  const updateReminder = (id: string, updates: Partial<Reminder>) => {
     setReminders(prevReminders =>
       prevReminders.map((reminder) =>
         reminder.id === id
@@ -329,7 +390,7 @@ export const ReminderProvider = ({ children }) => {
     return reminders.filter((reminder) => reminder.completed);
   };
 
-  const getRemindersByLocation = (locationName) => {
+  const getRemindersByLocation = (locationName: string) => {
     return reminders.filter(
       (reminder) =>
         reminder.location.name.toLowerCase().includes(locationName.toLowerCase())
@@ -375,7 +436,12 @@ export const ReminderProvider = ({ children }) => {
 };
 
 // Helper function to calculate distance (same as in provider)
-const calculateDistanceHelper = (lat1, lon1, lat2, lon2) => {
+const calculateDistanceHelper = (
+  lat1: number,
+  lon1: number,
+  lat2: number,
+  lon2: number
+) => {
   const R = 6371e3; // Earth's radius in meters
   const φ1 = (lat1 * Math.PI) / 180;
   const φ2 = (lat2 * Math.PI) / 180;
@@ -391,7 +457,9 @@ const calculateDistanceHelper = (lat1, lon1, lat2, lon2) => {
 };
 
 // Background task that runs independently of React context
-TaskManager.defineTask(LOCATION_TASK_NAME, async ({ data, error }) => {
+TaskManager.defineTask<{ locations: Location.LocationObject[] }>(
+  LOCATION_TASK_NAME,
+  async ({ data, error }) => {
   if (error) {
     console.error('Location task error:', error);
     return;
@@ -411,8 +479,8 @@ TaskManager.defineTask(LOCATION_TASK_NAME, async ({ data, error }) => {
       return;
     }
 
-    const reminders = JSON.parse(savedReminders);
-    const activeReminders = reminders.filter(r => !r.completed);
+    const reminders: Reminder[] = JSON.parse(savedReminders);
+    const activeReminders = reminders.filter((r) => !r.completed);
 
     if (activeReminders.length === 0) {
       return;
@@ -424,7 +492,7 @@ TaskManager.defineTask(LOCATION_TASK_NAME, async ({ data, error }) => {
 
     for (const reminder of activeReminders) {
       let shouldTrigger = false;
-      let matchedLocation = null;
+      let matchedLocation: Partial<LocationData> | null = null;
 
       // Chain mode: Check for nearby chain locations
       if (reminder.location.isChain) {
@@ -460,7 +528,7 @@ TaskManager.defineTask(LOCATION_TASK_NAME, async ({ data, error }) => {
             loc.longitude
           );
 
-          if (distance <= reminder.location.radius) {
+          if (distance <= (reminder.location.radius ?? 100)) {
             shouldTrigger = true;
             matchedLocation = loc;
             break;
@@ -509,7 +577,8 @@ TaskManager.defineTask(LOCATION_TASK_NAME, async ({ data, error }) => {
   } catch (taskError) {
     console.error('Background location task error:', taskError);
   }
-});
+  }
+);
 
 export const useReminders = () => {
   const context = useContext(ReminderContext);

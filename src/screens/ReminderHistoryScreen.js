@@ -25,6 +25,12 @@ export default function ReminderHistoryScreen() {
     const monthAgo = new Date(today.getTime() - 30 * 24 * 60 * 60 * 1000);
 
     return completedReminders.filter((reminder) => {
+      // Guard against completed reminders that never got a completedAt
+      // timestamp (e.g. legacy data, or toggled state) — an Invalid Date
+      // silently fails every comparison and the item vanishes from filters.
+      if (!reminder.completedAt) {
+        return filter === 'all';
+      }
       const completedDate = new Date(reminder.completedAt);
 
       switch (filter) {

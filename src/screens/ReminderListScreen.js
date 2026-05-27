@@ -20,6 +20,7 @@ import VoiceInput from '../components/VoiceInput';
 import ReminderItem from '../components/ReminderItem';
 import LocationPicker from '../components/LocationPicker';
 import { UpgradeBanner } from '../components/PremiumBadge';
+import { StatCard, EmptyState } from '../components/ui';
 
 export default function ReminderListScreen() {
   const navigation = useNavigation();
@@ -207,42 +208,12 @@ export default function ReminderListScreen() {
             </View>
           </View>
           <View className="flex-row" style={{ gap: 12 }}>
-            <View
-              className="flex-1 rounded-2xl p-5"
-              style={{
-                backgroundColor: isAtLimit ? colors.dangerLight : isNearLimit ? colors.warningLight : colors.surfaceGray,
-                borderWidth: 1,
-                borderColor: isAtLimit ? colors.danger : isNearLimit ? colors.warning : colors.border,
-              }}
-            >
-              <Text
-                className="text-3xl font-bold mb-1"
-                style={{ color: isAtLimit ? colors.danger : isNearLimit ? colors.warning : colors.text }}
-              >
-                {isPremium ? activeReminders.length : `${activeReminders.length}/${FREE_TIER_LIMITS.MAX_REMINDERS}`}
-              </Text>
-              <Text
-                className="text-xs font-semibold uppercase tracking-wider"
-                style={{ color: isAtLimit ? colors.danger : isNearLimit ? colors.warning : colors.textMuted }}
-              >
-                {isPremium ? 'Active' : isAtLimit ? 'Limit Reached' : 'Active'}
-              </Text>
-            </View>
-            <View
-              className="flex-1 rounded-2xl p-5"
-              style={{
-                backgroundColor: colors.primaryLight,
-                borderWidth: 1,
-                borderColor: colors.primary,
-              }}
-            >
-              <Text className="text-3xl font-bold mb-1" style={{ color: colors.primary }}>
-                {completedCount}
-              </Text>
-              <Text className="text-xs font-semibold uppercase tracking-wider" style={{ color: colors.primary }}>
-                Completed
-              </Text>
-            </View>
+            <StatCard
+              value={isPremium ? activeReminders.length : `${activeReminders.length}/${FREE_TIER_LIMITS.MAX_REMINDERS}`}
+              label={isAtLimit ? 'Limit Reached' : 'Active'}
+              tone={isAtLimit ? 'danger' : isNearLimit ? 'warning' : 'neutral'}
+            />
+            <StatCard value={completedCount} label="Completed" tone="primary" />
           </View>
 
           {/* Upgrade banner for users near limit */}
@@ -285,29 +256,12 @@ export default function ReminderListScreen() {
             contentContainerStyle={{ padding: 24, flexGrow: 1 }}
             showsVerticalScrollIndicator={false}
             ListEmptyComponent={
-              <View className="justify-center items-center py-8 px-6">
-                <View
-                  className="w-20 h-20 rounded-full justify-center items-center mb-4"
-                  style={{ backgroundColor: colors.surfaceGray, borderWidth: 1, borderColor: colors.border }}
-                >
-                  <Ionicons name="location-outline" size={40} color={colors.textMuted} />
-                </View>
-                <Text className="text-xl font-bold mb-1 tracking-tight" style={{ color: colors.text }}>
-                  No active reminders
-                </Text>
-                <Text className="text-sm text-center leading-5 mb-4" style={{ color: colors.textSecondary }}>
-                  Get notified at the right place and time
-                </Text>
-                <View
-                  className="flex-row items-center py-2 px-4 rounded-lg gap-1"
-                  style={{ backgroundColor: colors.pastelPurple }}
-                >
-                  <View className="w-1.5 h-1.5 rounded-full" style={{ backgroundColor: colors.primary }} />
-                  <Text className="text-sm font-medium" style={{ color: colors.text }}>
-                    Try: "Buy milk" at your local grocery store
-                  </Text>
-                </View>
-              </View>
+              <EmptyState
+                icon="location-outline"
+                title="No active reminders"
+                message="Get notified at the right place and time"
+                hint={'Try: "Buy milk" at your local grocery store'}
+              />
             }
           />
         </Animated.View>

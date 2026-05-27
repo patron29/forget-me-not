@@ -120,6 +120,67 @@ const darkColors = {
   premiumBackground: '#3D3415',
 };
 
+// ---------------------------------------------------------------------------
+// Design tokens — shared spacing / radius / typography / elevation scales.
+// Centralizing these keeps screens visually consistent and gives the redesign
+// (and the TypeScript types) a single source of truth instead of scattered
+// magic numbers.
+// ---------------------------------------------------------------------------
+export const spacing = {
+  xs: 4,
+  sm: 8,
+  md: 12,
+  lg: 16,
+  xl: 24,
+  xxl: 32,
+};
+
+export const radius = {
+  sm: 8,
+  md: 12,
+  lg: 16,
+  xl: 24,
+  full: 9999,
+};
+
+export const typography = {
+  display: { fontSize: 28, fontWeight: '700', letterSpacing: -0.5 },
+  title: { fontSize: 22, fontWeight: '700', letterSpacing: -0.3 },
+  heading: { fontSize: 18, fontWeight: '600', letterSpacing: -0.2 },
+  body: { fontSize: 15, fontWeight: '500' },
+  caption: { fontSize: 13, fontWeight: '500' },
+  overline: { fontSize: 11, fontWeight: '600', letterSpacing: 0.6, textTransform: 'uppercase' },
+};
+
+// Theme-aware elevation presets. Shadows read darker/softer in dark mode.
+export function getElevation(isDark) {
+  const shadowColor = '#000';
+  return {
+    none: {},
+    sm: {
+      shadowColor,
+      shadowOffset: { width: 0, height: 1 },
+      shadowOpacity: isDark ? 0.4 : 0.06,
+      shadowRadius: 3,
+      elevation: 2,
+    },
+    md: {
+      shadowColor,
+      shadowOffset: { width: 0, height: 4 },
+      shadowOpacity: isDark ? 0.5 : 0.1,
+      shadowRadius: 12,
+      elevation: 5,
+    },
+    lg: {
+      shadowColor,
+      shadowOffset: { width: 0, height: 8 },
+      shadowOpacity: isDark ? 0.6 : 0.14,
+      shadowRadius: 24,
+      elevation: 10,
+    },
+  };
+}
+
 export function ThemeProvider({ children }) {
   const systemColorScheme = useColorScheme();
   const [themeMode, setThemeMode] = useState('system'); // 'light' | 'dark' | 'system'
@@ -161,6 +222,11 @@ export function ThemeProvider({ children }) {
     isDark,
     colors,
     isLoaded,
+    // Design tokens
+    spacing,
+    radius,
+    typography,
+    elevation: getElevation(isDark),
   };
 
   return (

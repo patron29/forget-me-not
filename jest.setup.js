@@ -67,6 +67,26 @@ jest.mock('expo-speech', () => ({
   isSpeakingAsync: jest.fn(() => Promise.resolve(false)),
 }));
 
+// Mock react-native-purchases (RevenueCat native module)
+jest.mock('react-native-purchases', () => ({
+  __esModule: true,
+  default: {
+    configure: jest.fn(),
+    addCustomerInfoUpdateListener: jest.fn(),
+    removeCustomerInfoUpdateListener: jest.fn(),
+    getCustomerInfo: jest.fn(() =>
+      Promise.resolve({ entitlements: { active: {} } })
+    ),
+    getOfferings: jest.fn(() => Promise.resolve({ current: null })),
+    purchasePackage: jest.fn(() =>
+      Promise.resolve({ customerInfo: { entitlements: { active: {} } } })
+    ),
+    restorePurchases: jest.fn(() =>
+      Promise.resolve({ entitlements: { active: {} } })
+    ),
+  },
+}));
+
 // Mock expo-speech-recognition (native module, not present under jest)
 jest.mock('expo-speech-recognition', () => ({
   ExpoSpeechRecognitionModule: {

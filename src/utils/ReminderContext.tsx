@@ -12,30 +12,15 @@ import * as TaskManager from 'expo-task-manager';
 import { checkChainProximity } from '../services/placesService';
 import { useSubscription, FREE_TIER_LIMITS } from './SubscriptionContext';
 import type { Reminder, LocationData, ReminderActionError } from '../types';
+import {
+  isWithinRadius,
+  canTrigger,
+  parseStoredReminders,
+} from './geofencing';
 
 const LOCATION_TASK_NAME = 'background-location-task';
 
 type LocationPermissionState = 'full' | 'foreground' | 'denied' | null;
-
-/**
- * Parse the persisted reminders blob defensively. Stored data can be valid
- * JSON but the wrong shape (legacy data, manual edits, partial writes); an
- * unguarded JSON.parse + .filter would then crash the UI or silently kill the
- * background task. We require an array and drop entries missing a location.
- */
-function parseStoredReminders(raw: string): Reminder[] {
-  let parsed: unknown;
-  try {
-    parsed = JSON.parse(raw);
-  } catch {
-    return [];
-  }
-  if (!Array.isArray(parsed)) return [];
-  return parsed.filter(
-    (r): r is Reminder =>
-      r != null && typeof r === 'object' && 'location' in r && r.location != null
-  );
-}
 
 /** A coordinate pair, the minimum needed for proximity checks. */
 interface Coords {
@@ -308,14 +293,7 @@ export const ReminderProvider = ({ children }: { children: ReactNode }) => {
           }];
 
           for (const loc of locationsToCheck) {
-            const distance = calculateDistance(
-              currentLocation.latitude,
-              currentLocation.longitude,
-              loc.latitude,
-              loc.longitude
-            );
-
-            if (distance <= (reminder.location.radius ?? 100)) {
+            if (isWithinRadius(currentLocation, loc, reminder.location.radius)) {
               shouldTrigger = true;
               matchedLocation = loc;
               break; // Found a matching location, no need to check others
@@ -323,21 +301,10 @@ export const ReminderProvider = ({ children }: { children: ReactNode }) => {
           }
         }
 
-        // If within radius, check if we should trigger
-        if (shouldTrigger) {
-          // Throttle: Only trigger if not triggered in last 15 minutes
-          const now = Date.now();
-          // A malformed timestamp yields NaN, and `now - NaN >= window` is
-          // always false — which would throttle the reminder forever. Treat
-          // an unparseable value as "never triggered".
-          const parsedLast = reminder.lastTriggeredAt ? new Date(reminder.lastTriggeredAt).getTime() : 0;
-          const lastTriggered = Number.isFinite(parsedLast) ? parsedLast : 0;
-          const fifteenMinutes = 15 * 60 * 1000;
-
-          if (now - lastTriggered >= fifteenMinutes) {
-            await sendNotification(reminder, matchedLocation);
-            remindersToUpdate.push(reminder.id);
-          }
+        // If within radius, fire only if outside the throttle window.
+        if (shouldTrigger && canTrigger(reminder.lastTriggeredAt)) {
+          await sendNotification(reminder, matchedLocation);
+          remindersToUpdate.push(reminder.id);
         }
       }
 
@@ -387,27 +354,6 @@ export const ReminderProvider = ({ children }: { children: ReactNode }) => {
     } catch (error) {
       console.error('Error sending notification:', error);
     }
-  };
-
-  const calculateDistance = (
-    lat1: number,
-    lon1: number,
-    lat2: number,
-    lon2: number
-  ) => {
-    // Haversine formula to calculate distance between two coordinates
-    const R = 6371e3; // Earth's radius in meters
-    const φ1 = (lat1 * Math.PI) / 180;
-    const φ2 = (lat2 * Math.PI) / 180;
-    const Δφ = ((lat2 - lat1) * Math.PI) / 180;
-    const Δλ = ((lon2 - lon1) * Math.PI) / 180;
-
-    const a =
-      Math.sin(Δφ / 2) * Math.sin(Δφ / 2) +
-      Math.cos(φ1) * Math.cos(φ2) * Math.sin(Δλ / 2) * Math.sin(Δλ / 2);
-    const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
-
-    return R * c; // Distance in meters
   };
 
   const toggleReminder = (id: string) => {
@@ -492,26 +438,6 @@ export const ReminderProvider = ({ children }: { children: ReactNode }) => {
 };
 
 // Helper function to calculate distance (same as in provider)
-const calculateDistanceHelper = (
-  lat1: number,
-  lon1: number,
-  lat2: number,
-  lon2: number
-) => {
-  const R = 6371e3; // Earth's radius in meters
-  const φ1 = (lat1 * Math.PI) / 180;
-  const φ2 = (lat2 * Math.PI) / 180;
-  const Δφ = ((lat2 - lat1) * Math.PI) / 180;
-  const Δλ = ((lon2 - lon1) * Math.PI) / 180;
-
-  const a =
-    Math.sin(Δφ / 2) * Math.sin(Δφ / 2) +
-    Math.cos(φ1) * Math.cos(φ2) * Math.sin(Δλ / 2) * Math.sin(Δλ / 2);
-  const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
-
-  return R * c;
-};
-
 // Background task that runs independently of React context
 TaskManager.defineTask<{ locations: Location.LocationObject[] }>(
   LOCATION_TASK_NAME,
@@ -543,7 +469,6 @@ TaskManager.defineTask<{ locations: Location.LocationObject[] }>(
     }
 
     const now = Date.now();
-    const fifteenMinutes = 15 * 60 * 1000;
     let hasUpdates = false;
 
     for (const reminder of activeReminders) {
@@ -577,14 +502,7 @@ TaskManager.defineTask<{ locations: Location.LocationObject[] }>(
         }];
 
         for (const loc of locationsToCheck) {
-          const distance = calculateDistanceHelper(
-            currentLocation.latitude,
-            currentLocation.longitude,
-            loc.latitude,
-            loc.longitude
-          );
-
-          if (distance <= (reminder.location.radius ?? 100)) {
+          if (isWithinRadius(currentLocation, loc, reminder.location.radius)) {
             shouldTrigger = true;
             matchedLocation = loc;
             break;
@@ -593,14 +511,8 @@ TaskManager.defineTask<{ locations: Location.LocationObject[] }>(
       }
 
       if (shouldTrigger) {
-        // Throttle: Only trigger if not triggered in last 15 minutes.
-        // Guard against a malformed timestamp (NaN) permanently throttling.
-        const parsedLast = reminder.lastTriggeredAt
-          ? new Date(reminder.lastTriggeredAt).getTime()
-          : 0;
-        const lastTriggered = Number.isFinite(parsedLast) ? parsedLast : 0;
-
-        if (now - lastTriggered >= fifteenMinutes) {
+        // Throttle: only fire if outside the window (canTrigger guards NaN).
+        if (canTrigger(reminder.lastTriggeredAt, now)) {
           // Update reminder in the array
           reminder.triggeredCount = (reminder.triggeredCount || 0) + 1;
           reminder.lastTriggeredAt = new Date().toISOString();

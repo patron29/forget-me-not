@@ -7,6 +7,8 @@ import {
   Modal,
   ScrollView,
   ActivityIndicator,
+  KeyboardAvoidingView,
+  Platform,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { searchBusinessChains, POPULAR_CHAINS } from '../services/placesService';
@@ -130,7 +132,10 @@ export default function BusinessSearch({ visible, onClose, onSelectBusiness }: B
       transparent={true}
       onRequestClose={handleClose}
     >
-      <View className="flex-1 bg-black/40 justify-end">
+      <KeyboardAvoidingView
+        className="flex-1 bg-black/40 justify-end"
+        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+      >
         <View className="bg-white rounded-t-3xl pt-6 px-6 pb-6 max-h-[90%]">
           <View className="flex-row justify-between items-center mb-4">
             <Text className="text-2xl font-bold text-text tracking-tight">
@@ -159,7 +164,12 @@ export default function BusinessSearch({ visible, onClose, onSelectBusiness }: B
             )}
           </View>
 
-          <ScrollView className="flex-1" showsVerticalScrollIndicator={false}>
+          <ScrollView
+            className="flex-1"
+            showsVerticalScrollIndicator={false}
+            keyboardDismissMode="on-drag"
+            keyboardShouldPersistTaps="handled"
+          >
             {showingCategory && (
               <TouchableOpacity
                 className="flex-row items-center gap-2 mb-4"
@@ -242,7 +252,7 @@ export default function BusinessSearch({ visible, onClose, onSelectBusiness }: B
             )}
           </ScrollView>
         </View>
-      </View>
+      </KeyboardAvoidingView>
     </Modal>
   );
 }

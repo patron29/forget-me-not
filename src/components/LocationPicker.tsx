@@ -8,6 +8,8 @@ import {
   ActivityIndicator,
   ScrollView,
   Alert,
+  KeyboardAvoidingView,
+  Platform,
 } from 'react-native';
 import type { TextStyle } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
@@ -387,7 +389,11 @@ export default function LocationPicker({ visible, onClose, onLocationSelect }: L
       transparent={true}
       onRequestClose={handleClose}
     >
-      <View className="flex-1 justify-end" style={{ backgroundColor: colors.modalBackground }}>
+      <KeyboardAvoidingView
+        className="flex-1 justify-end"
+        style={{ backgroundColor: colors.modalBackground }}
+        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+      >
         <View className="rounded-t-3xl pt-6 px-6 max-h-[90%]" style={{ backgroundColor: colors.surface }}>
           <View className="flex-row justify-between items-center mb-6">
             <Text className="text-2xl font-bold tracking-tight" style={{ color: colors.text }}>
@@ -398,7 +404,11 @@ export default function LocationPicker({ visible, onClose, onLocationSelect }: L
             </TouchableOpacity>
           </View>
 
-          <ScrollView showsVerticalScrollIndicator={false}>
+          <ScrollView
+            showsVerticalScrollIndicator={false}
+            keyboardDismissMode="on-drag"
+            keyboardShouldPersistTaps="handled"
+          >
             {/* Chain Mode Toggle */}
             <TouchableOpacity
               className="flex-row items-center justify-between p-4 rounded-lg mb-4"
@@ -698,7 +708,7 @@ export default function LocationPicker({ visible, onClose, onLocationSelect }: L
             </TouchableOpacity>
           </ScrollView>
         </View>
-      </View>
+      </KeyboardAvoidingView>
     </Modal>
   );
 }

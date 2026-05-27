@@ -375,7 +375,11 @@ export default function ReminderListScreen() {
           transparent={true}
           onRequestClose={() => setShowEditTextModal(false)}
         >
-          <View className="flex-1 justify-center items-center p-6" style={{ backgroundColor: colors.overlay }}>
+          <KeyboardAvoidingView
+            className="flex-1 justify-center items-center p-6"
+            style={{ backgroundColor: colors.overlay }}
+            behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+          >
             <View className="rounded-lg p-6 w-full max-w-[400px]" style={{ backgroundColor: colors.surface }}>
               <Text className="text-xl font-bold mb-4" style={{ color: colors.text }}>Edit Reminder</Text>
               <TextInput
@@ -416,7 +420,7 @@ export default function ReminderListScreen() {
                 </TouchableOpacity>
               </View>
             </View>
-          </View>
+          </KeyboardAvoidingView>
         </Modal>
       </KeyboardAvoidingView>
     </View>

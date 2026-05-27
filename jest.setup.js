@@ -95,6 +95,7 @@ jest.mock('expo-speech-recognition', () => ({
     ),
     start: jest.fn(),
     stop: jest.fn(),
+    addListener: jest.fn(() => ({ remove: jest.fn() })),
   },
   useSpeechRecognitionEvent: jest.fn(),
 }));

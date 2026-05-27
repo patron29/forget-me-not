@@ -1,35 +1,6 @@
 import React from 'react';
-import { render, fireEvent } from '@testing-library/react-native';
+import { renderWithProviders as render, fireEvent } from '../src/test-utils';
 import ReminderItem from '../src/components/ReminderItem';
-
-// Mock the theme
-jest.mock('../src/utils/theme', () => ({
-  COLORS: {
-    text: '#1a1a2e',
-    textMuted: '#666666',
-    textSecondary: '#888888',
-    accent: '#FFD93D',
-    surface: '#FFFFFF',
-    surfaceGray: '#F5F5F5',
-    pastelGreen: '#C8E6C9',
-    border: '#E0E0E0',
-    danger: { start: '#FF6B6B' },
-    success: { start: '#4CAF50', middle: '#66BB6A' },
-  },
-  SPACING: {
-    xs: 4,
-    sm: 8,
-    md: 12,
-    lg: 16,
-    xl: 24,
-  },
-  BORDER_RADIUS: {
-    sm: 4,
-    md: 8,
-    lg: 12,
-  },
-  SHADOWS: {},
-}));
 
 const mockReminder = {
   id: '1',

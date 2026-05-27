@@ -10,6 +10,7 @@ import {
   Modal,
   Image,
   KeyboardAvoidingView,
+  Keyboard,
   Platform,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
@@ -50,6 +51,7 @@ export default function ReminderListScreen() {
   const [editingTextReminder, setEditingTextReminder] = useState<Reminder | null>(null);
   const fadeAnim = useRef<Animated.Value>(new Animated.Value(0)).current;
   const insets = useSafeAreaInsets();
+  const [keyboardVisible, setKeyboardVisible] = useState<boolean>(false);
 
   const activeReminders = reminders.filter((r: Reminder) => !r.completed);
   const completedCount = reminders.filter((r: Reminder) => r.completed).length;
@@ -63,6 +65,20 @@ export default function ReminderListScreen() {
       duration: 600,
       useNativeDriver: true,
     }).start();
+  }, []);
+
+  // Track keyboard visibility so we can drop the home-indicator bottom inset
+  // while it's open — otherwise that inset stacks on top of the keyboard and
+  // leaves a large empty gap above it.
+  useEffect(() => {
+    const showEvt = Platform.OS === 'ios' ? 'keyboardWillShow' : 'keyboardDidShow';
+    const hideEvt = Platform.OS === 'ios' ? 'keyboardWillHide' : 'keyboardDidHide';
+    const show = Keyboard.addListener(showEvt, () => setKeyboardVisible(true));
+    const hide = Keyboard.addListener(hideEvt, () => setKeyboardVisible(false));
+    return () => {
+      show.remove();
+      hide.remove();
+    };
   }, []);
 
   const handleVoiceInput = (text: string) => {
@@ -283,7 +299,10 @@ export default function ReminderListScreen() {
           className="px-6 py-6"
           style={{
             opacity: fadeAnim,
-            paddingBottom: 24 + insets.bottom,
+            // Only add the home-indicator inset when the keyboard is hidden;
+            // while it's open the keyboard already occupies that space, so
+            // adding the inset would leave a large gap above it.
+            paddingBottom: keyboardVisible ? 12 : 24 + insets.bottom,
             backgroundColor: colors.background,
           }}
         >

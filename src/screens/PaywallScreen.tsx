@@ -100,7 +100,11 @@ export default function PaywallScreen({ navigation }: RootStackScreenProps<'Payw
     <View className="flex-1" style={{ backgroundColor: colors.background }}>
       <ScrollView
         className="flex-1"
-        contentContainerStyle={{ paddingBottom: 120 }}
+        // Reserve enough room for the absolutely-positioned Subscribe bar
+        // (button + fine print + bottom safe-area inset) so the Terms/Privacy
+        // links at the end of the scroll aren't hidden behind it and stay
+        // tappable. The old fixed 120 was shorter than the bar on tall phones.
+        contentContainerStyle={{ paddingBottom: insets.bottom + 190 }}
         showsVerticalScrollIndicator={false}
       >
         {/* Header */}

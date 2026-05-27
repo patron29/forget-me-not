@@ -1,19 +1,20 @@
 import React, { useState, useEffect } from 'react';
 import {
   TouchableOpacity,
-  StyleSheet,
   Alert,
-  Platform,
   Animated,
+  View,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import * as Speech from 'expo-speech';
 import { Audio } from 'expo-av';
+import { useTheme } from '../utils/ThemeContext';
 
 export default function VoiceInput({ onVoiceResult }) {
   const [isListening, setIsListening] = useState(false);
   const [recording, setRecording] = useState(null);
   const pulseAnim = useState(new Animated.Value(1))[0];
+  const { colors } = useTheme();
 
   useEffect(() => {
     if (isListening) {
@@ -38,7 +39,6 @@ export default function VoiceInput({ onVoiceResult }) {
 
   const startListening = async () => {
     try {
-      // Request microphone permissions
       const { status } = await Audio.requestPermissionsAsync();
 
       if (status !== 'granted') {
@@ -49,23 +49,11 @@ export default function VoiceInput({ onVoiceResult }) {
         return;
       }
 
-      // Note: React Native doesn't have built-in speech recognition
-      // This is a placeholder that demonstrates the UI interaction
-      // In a production app, you would integrate with a service like:
-      // - @react-native-voice/voice
-      // - Google Cloud Speech-to-Text
-      // - AWS Transcribe
-      // - Azure Speech Services
-
       setIsListening(true);
-
-      // Provide feedback to user
       Speech.speak('Listening', { rate: 1.2 });
 
-      // Simulate voice recognition (in production, replace with actual API call)
       setTimeout(() => {
         stopListening();
-        // Example: onVoiceResult('This is a sample voice input');
         Alert.alert(
           'Voice Input',
           'Voice recognition requires additional setup. Please use the text input for now.',
@@ -73,7 +61,6 @@ export default function VoiceInput({ onVoiceResult }) {
             {
               text: 'OK',
               onPress: () => {
-                // Provide sample text for demonstration
                 onVoiceResult('Sample task from voice input');
               },
             },
@@ -106,52 +93,24 @@ export default function VoiceInput({ onVoiceResult }) {
 
   return (
     <TouchableOpacity
-      style={[
-        styles.button,
-        isListening && styles.buttonActive,
-      ]}
+      className="w-11 h-11 justify-center items-center"
       onPress={handlePress}
       activeOpacity={0.7}
     >
       <Animated.View
-        style={[
-          styles.iconContainer,
-          isListening && styles.iconContainerActive,
-          { transform: [{ scale: pulseAnim }] },
-        ]}
+        className="w-11 h-11 rounded-full justify-center items-center border-2"
+        style={{
+          transform: [{ scale: pulseAnim }],
+          backgroundColor: isListening ? colors.danger : colors.pastelBlue,
+          borderColor: isListening ? colors.danger : colors.primary,
+        }}
       >
         <Ionicons
           name={isListening ? 'mic' : 'mic-outline'}
           size={24}
-          color={isListening ? '#fff' : '#007AFF'}
+          color={isListening ? '#FFFFFF' : colors.primary}
         />
       </Animated.View>
     </TouchableOpacity>
   );
 }
-
-const styles = StyleSheet.create({
-  button: {
-    width: 44,
-    height: 44,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  buttonActive: {
-    // Active state styling
-  },
-  iconContainer: {
-    width: 44,
-    height: 44,
-    borderRadius: 22,
-    backgroundColor: '#f0f8ff',
-    borderWidth: 2,
-    borderColor: '#007AFF',
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  iconContainerActive: {
-    backgroundColor: '#FF3B30',
-    borderColor: '#FF3B30',
-  },
-});

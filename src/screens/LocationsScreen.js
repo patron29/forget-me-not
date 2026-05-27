@@ -1,20 +1,18 @@
-import React, { useState } from 'react';
+import React from 'react';
 import {
   View,
   Text,
-  StyleSheet,
   FlatList,
-  TouchableOpacity,
-  SectionList,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useReminders } from '../utils/ReminderContext';
+import { useTheme } from '../utils/ThemeContext';
 import ReminderItem from '../components/ReminderItem';
 
 export default function LocationsScreen() {
   const { reminders, toggleReminder, deleteReminder } = useReminders();
+  const { colors } = useTheme();
 
-  // Group reminders by location
   const getLocationGroups = () => {
     const locationMap = new Map();
 
@@ -48,31 +46,41 @@ export default function LocationsScreen() {
   const locationGroups = getLocationGroups();
 
   const LocationHeader = ({ location, activeCount, completedCount }) => (
-    <View style={styles.locationHeader}>
-      <View style={styles.locationHeaderLeft}>
-        <View style={styles.locationIconContainer}>
-          <Ionicons name="location" size={24} color="#007AFF" />
+    <View
+      className="flex-row items-center justify-between p-4 rounded-xl mb-3"
+      style={{ backgroundColor: colors.surface, shadowColor: colors.text, shadowOpacity: 0.05, shadowRadius: 4, elevation: 2 }}
+    >
+      <View className="flex-row items-center flex-1 gap-3">
+        <View
+          className="w-12 h-12 rounded-full justify-center items-center"
+          style={{ backgroundColor: colors.pastelBlue }}
+        >
+          <Ionicons name="location" size={24} color={colors.primary} />
         </View>
-        <View style={styles.locationInfo}>
-          <Text style={styles.locationName}>{location.name}</Text>
+        <View className="flex-1">
+          <Text className="text-lg font-bold mb-0.5" style={{ color: colors.text }}>{location.name}</Text>
           {location.address && (
-            <Text style={styles.locationAddress} numberOfLines={1}>
+            <Text className="text-sm" style={{ color: colors.textSecondary }} numberOfLines={1}>
               {location.address}
             </Text>
           )}
         </View>
       </View>
-      <View style={styles.locationStats}>
+      <View className="flex-row gap-2">
         {activeCount > 0 && (
-          <View style={styles.badge}>
-            <Text style={styles.badgeText}>{activeCount}</Text>
+          <View
+            className="rounded-xl min-w-[28px] h-7 justify-center items-center px-2"
+            style={{ backgroundColor: colors.primary }}
+          >
+            <Text className="text-white text-sm font-bold">{activeCount}</Text>
           </View>
         )}
         {completedCount > 0 && (
-          <View style={[styles.badge, styles.badgeCompleted]}>
-            <Text style={[styles.badgeText, styles.badgeTextCompleted]}>
-              {completedCount}
-            </Text>
+          <View
+            className="rounded-xl min-w-[28px] h-7 justify-center items-center px-2"
+            style={{ backgroundColor: colors.pastelGreen }}
+          >
+            <Text className="text-sm font-bold" style={{ color: colors.success }}>{completedCount}</Text>
           </View>
         )}
       </View>
@@ -80,7 +88,7 @@ export default function LocationsScreen() {
   );
 
   const renderLocationGroup = ({ item }) => (
-    <View style={styles.groupContainer}>
+    <View className="mb-6">
       <LocationHeader
         location={item.location}
         activeCount={item.activeCount}
@@ -98,18 +106,21 @@ export default function LocationsScreen() {
   );
 
   return (
-    <View style={styles.container}>
+    <View className="flex-1" style={{ backgroundColor: colors.surfaceGray }}>
       {locationGroups.length > 0 && (
-        <View style={styles.summaryBar}>
-          <View style={styles.summaryItem}>
-            <Ionicons name="location-outline" size={20} color="#007AFF" />
-            <Text style={styles.summaryText}>
+        <View
+          className="flex-row py-4 px-5 border-b justify-around"
+          style={{ backgroundColor: colors.surface, borderBottomColor: colors.border }}
+        >
+          <View className="flex-row items-center gap-2">
+            <Ionicons name="location-outline" size={20} color={colors.primary} />
+            <Text className="text-base font-semibold" style={{ color: colors.text }}>
               {locationGroups.length} {locationGroups.length === 1 ? 'Location' : 'Locations'}
             </Text>
           </View>
-          <View style={styles.summaryItem}>
-            <Ionicons name="notifications-outline" size={20} color="#4CD964" />
-            <Text style={styles.summaryText}>{reminders.length} Total</Text>
+          <View className="flex-row items-center gap-2">
+            <Ionicons name="notifications-outline" size={20} color={colors.success} />
+            <Text className="text-base font-semibold" style={{ color: colors.text }}>{reminders.length} Total</Text>
           </View>
         </View>
       )}
@@ -118,12 +129,12 @@ export default function LocationsScreen() {
         data={locationGroups}
         renderItem={renderLocationGroup}
         keyExtractor={(item) => item.locationName}
-        contentContainerStyle={styles.listContent}
+        contentContainerStyle={{ padding: 16, flexGrow: 1 }}
         ListEmptyComponent={
-          <View style={styles.emptyContainer}>
-            <Ionicons name="map-outline" size={80} color="#ccc" />
-            <Text style={styles.emptyText}>No locations yet</Text>
-            <Text style={styles.emptySubtext}>
+          <View className="flex-1 justify-center items-center pt-24">
+            <Ionicons name="map-outline" size={80} color={colors.textMuted} />
+            <Text className="text-2xl font-bold mt-4" style={{ color: colors.textMuted }}>No locations yet</Text>
+            <Text className="text-base mt-2 text-center" style={{ color: colors.textLight }}>
               Add reminders to see them grouped by location
             </Text>
           </View>
@@ -132,119 +143,3 @@ export default function LocationsScreen() {
     </View>
   );
 }
-
-const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: '#f5f5f5',
-  },
-  summaryBar: {
-    flexDirection: 'row',
-    backgroundColor: '#fff',
-    paddingVertical: 16,
-    paddingHorizontal: 20,
-    borderBottomWidth: 1,
-    borderBottomColor: '#e0e0e0',
-    justifyContent: 'space-around',
-  },
-  summaryItem: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-  },
-  summaryText: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: '#333',
-  },
-  listContent: {
-    padding: 16,
-    flexGrow: 1,
-  },
-  groupContainer: {
-    marginBottom: 24,
-  },
-  locationHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    backgroundColor: '#fff',
-    padding: 16,
-    borderRadius: 12,
-    marginBottom: 12,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.1,
-    shadowRadius: 2,
-    elevation: 2,
-  },
-  locationHeaderLeft: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    flex: 1,
-    gap: 12,
-  },
-  locationIconContainer: {
-    width: 48,
-    height: 48,
-    borderRadius: 24,
-    backgroundColor: '#f0f8ff',
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  locationInfo: {
-    flex: 1,
-  },
-  locationName: {
-    fontSize: 18,
-    fontWeight: 'bold',
-    color: '#333',
-    marginBottom: 2,
-  },
-  locationAddress: {
-    fontSize: 13,
-    color: '#666',
-  },
-  locationStats: {
-    flexDirection: 'row',
-    gap: 8,
-  },
-  badge: {
-    backgroundColor: '#007AFF',
-    borderRadius: 12,
-    minWidth: 28,
-    height: 28,
-    justifyContent: 'center',
-    alignItems: 'center',
-    paddingHorizontal: 8,
-  },
-  badgeCompleted: {
-    backgroundColor: '#e8f5e9',
-  },
-  badgeText: {
-    color: '#fff',
-    fontSize: 14,
-    fontWeight: 'bold',
-  },
-  badgeTextCompleted: {
-    color: '#4CD964',
-  },
-  emptyContainer: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-    paddingTop: 100,
-  },
-  emptyText: {
-    fontSize: 24,
-    fontWeight: 'bold',
-    color: '#999',
-    marginTop: 16,
-  },
-  emptySubtext: {
-    fontSize: 16,
-    color: '#ccc',
-    marginTop: 8,
-    textAlign: 'center',
-  },
-});

@@ -3,6 +3,8 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as Location from 'expo-location';
 import * as Notifications from 'expo-notifications';
 import * as TaskManager from 'expo-task-manager';
+import { checkChainProximity } from '../services/placesService';
+import { useSubscription, FREE_TIER_LIMITS } from './SubscriptionContext';
 
 const LOCATION_TASK_NAME = 'background-location-task';
 const ReminderContext = createContext();
@@ -21,6 +23,15 @@ export const ReminderProvider = ({ children }) => {
   const [locationPermission, setLocationPermission] = useState(null);
   const [isLoaded, setIsLoaded] = useState(false);
   const [isGeofencingActive, setIsGeofencingActive] = useState(false);
+
+  // Get subscription status - may be null if not wrapped in SubscriptionProvider
+  let subscriptionContext = null;
+  try {
+    subscriptionContext = useSubscription();
+  } catch (e) {
+    // Running outside SubscriptionProvider (e.g., in tests)
+  }
+  const isPremium = subscriptionContext?.isPremium || false;
 
   useEffect(() => {
     loadReminders();
@@ -75,15 +86,45 @@ export const ReminderProvider = ({ children }) => {
   };
 
   const addReminder = async (text, location) => {
+    // Check subscription limits for free users
+    const activeReminders = reminders.filter(r => !r.completed);
+    if (!isPremium && activeReminders.length >= FREE_TIER_LIMITS.MAX_REMINDERS) {
+      return { error: 'UPGRADE_REQUIRED', message: `Free accounts are limited to ${FREE_TIER_LIMITS.MAX_REMINDERS} active reminders` };
+    }
+
+    // Check for premium-only features
+    if (!isPremium) {
+      // Chain mode is premium only
+      if (location.isChain) {
+        return { error: 'PREMIUM_FEATURE', feature: 'chain_mode', message: 'Chain mode is a premium feature' };
+      }
+      // Multiple locations is premium only
+      if (location.locations && location.locations.length > 1) {
+        return { error: 'PREMIUM_FEATURE', feature: 'multi_location', message: 'Multiple locations is a premium feature' };
+      }
+    }
+
+    // Support for multiple locations
+    const locationsArray = location.locations || [{
+      id: `${Date.now()}-${Math.random().toString(36).substring(2, 11)}`,
+      name: location.name,
+      address: location.address || '',
+      latitude: location.latitude,
+      longitude: location.longitude,
+    }];
+
     const newReminder = {
-      id: `${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
+      id: `${Date.now()}-${Math.random().toString(36).substring(2, 11)}`,
       text,
       location: {
         name: location.name,
         address: location.address || '',
         latitude: location.latitude,
         longitude: location.longitude,
-        radius: location.radius || 200, // Default 200 meters
+        radius: location.radius || 100, // Default 100 meters (matches FIXED_RADIUS)
+        isChain: location.isChain || false, // Chain/franchise mode
+        // New: Array of all locations for multi-location reminders
+        locations: locationsArray,
       },
       completed: false,
       createdAt: new Date().toISOString(),
@@ -135,22 +176,57 @@ export const ReminderProvider = ({ children }) => {
       const remindersToUpdate = [];
 
       for (const reminder of activeReminders) {
-        const distance = calculateDistance(
-          currentLocation.latitude,
-          currentLocation.longitude,
-          reminder.location.latitude,
-          reminder.location.longitude
-        );
+        let shouldTrigger = false;
+        let matchedLocation = null;
+
+        // Chain mode: Check for nearby chain locations
+        if (reminder.location.isChain) {
+          const chainMatch = await checkChainProximity(
+            currentLocation.latitude,
+            currentLocation.longitude,
+            reminder.location.name,
+            5000, // Search within 5km for chain locations
+            reminder.location.radius // Use the reminder's proximity radius
+          );
+
+          if (chainMatch) {
+            shouldTrigger = true;
+            matchedLocation = chainMatch;
+          }
+        } else {
+          // Regular mode: Check distance to all locations in the array
+          const locationsToCheck = reminder.location.locations || [{
+            latitude: reminder.location.latitude,
+            longitude: reminder.location.longitude,
+            name: reminder.location.name,
+            address: reminder.location.address,
+          }];
+
+          for (const loc of locationsToCheck) {
+            const distance = calculateDistance(
+              currentLocation.latitude,
+              currentLocation.longitude,
+              loc.latitude,
+              loc.longitude
+            );
+
+            if (distance <= reminder.location.radius) {
+              shouldTrigger = true;
+              matchedLocation = loc;
+              break; // Found a matching location, no need to check others
+            }
+          }
+        }
 
         // If within radius, check if we should trigger
-        if (distance <= reminder.location.radius) {
+        if (shouldTrigger) {
           // Throttle: Only trigger if not triggered in last 15 minutes
           const now = Date.now();
           const lastTriggered = reminder.lastTriggeredAt ? new Date(reminder.lastTriggeredAt).getTime() : 0;
           const fifteenMinutes = 15 * 60 * 1000;
 
           if (now - lastTriggered >= fifteenMinutes) {
-            await sendNotification(reminder);
+            await sendNotification(reminder, matchedLocation);
             remindersToUpdate.push(reminder.id);
           }
         }
@@ -175,12 +251,22 @@ export const ReminderProvider = ({ children }) => {
     }
   };
 
-  const sendNotification = async (reminder) => {
+  const sendNotification = async (reminder, matchedLocation = null) => {
     try {
+      let locationText = reminder.location.name;
+
+      // If chain mode and we have a specific matched location, include address
+      if (reminder.location.isChain && matchedLocation) {
+        locationText = `${matchedLocation.name}${matchedLocation.address ? ` (${matchedLocation.address})` : ''}`;
+      } else if (matchedLocation && matchedLocation.name) {
+        // Multi-location mode: show which specific location was matched
+        locationText = `${matchedLocation.name}${matchedLocation.address ? ` (${matchedLocation.address})` : ''}`;
+      }
+
       await Notifications.scheduleNotificationAsync({
         content: {
           title: 'Forget Me Not!',
-          body: `${reminder.text} at ${reminder.location.name}`,
+          body: `${reminder.text} at ${locationText}`,
           data: { reminderId: reminder.id },
           sound: true,
         },
@@ -225,6 +311,16 @@ export const ReminderProvider = ({ children }) => {
     setReminders(prevReminders => prevReminders.filter((reminder) => reminder.id !== id));
   };
 
+  const updateReminder = (id, updates) => {
+    setReminders(prevReminders =>
+      prevReminders.map((reminder) =>
+        reminder.id === id
+          ? { ...reminder, ...updates }
+          : reminder
+      )
+    );
+  };
+
   const getActiveReminders = () => {
     return reminders.filter((reminder) => !reminder.completed);
   };
@@ -240,6 +336,20 @@ export const ReminderProvider = ({ children }) => {
     );
   };
 
+  // Helper to get count info for UI
+  const getReminderUsage = () => {
+    const active = reminders.filter(r => !r.completed).length;
+    const limit = isPremium ? Infinity : FREE_TIER_LIMITS.MAX_REMINDERS;
+    const remaining = isPremium ? Infinity : Math.max(0, limit - active);
+    return { active, limit, remaining, isPremium };
+  };
+
+  // Check if user can add more reminders
+  const canAddReminder = () => {
+    const active = reminders.filter(r => !r.completed).length;
+    return isPremium || active < FREE_TIER_LIMITS.MAX_REMINDERS;
+  };
+
   return (
     <ReminderContext.Provider
       value={{
@@ -247,11 +357,16 @@ export const ReminderProvider = ({ children }) => {
         addReminder,
         toggleReminder,
         deleteReminder,
+        updateReminder,
         getActiveReminders,
         getCompletedReminders,
         getRemindersByLocation,
         checkProximity,
         locationPermission,
+        // Subscription-related
+        isPremium,
+        getReminderUsage,
+        canAddReminder,
       }}
     >
       {children}
@@ -259,19 +374,140 @@ export const ReminderProvider = ({ children }) => {
   );
 };
 
-// Define background task
+// Helper function to calculate distance (same as in provider)
+const calculateDistanceHelper = (lat1, lon1, lat2, lon2) => {
+  const R = 6371e3; // Earth's radius in meters
+  const φ1 = (lat1 * Math.PI) / 180;
+  const φ2 = (lat2 * Math.PI) / 180;
+  const Δφ = ((lat2 - lat1) * Math.PI) / 180;
+  const Δλ = ((lon2 - lon1) * Math.PI) / 180;
+
+  const a =
+    Math.sin(Δφ / 2) * Math.sin(Δφ / 2) +
+    Math.cos(φ1) * Math.cos(φ2) * Math.sin(Δλ / 2) * Math.sin(Δλ / 2);
+  const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+
+  return R * c;
+};
+
+// Background task that runs independently of React context
 TaskManager.defineTask(LOCATION_TASK_NAME, async ({ data, error }) => {
   if (error) {
     console.error('Location task error:', error);
     return;
   }
-  if (data) {
-    const { locations } = data;
-    const location = locations[0];
 
-    // Note: This is a simplified version. In production, you'd need to
-    // access the reminder context differently in the background task
-    console.log('Background location:', location);
+  if (!data || !data.locations || data.locations.length === 0) {
+    return;
+  }
+
+  const { locations } = data;
+  const currentLocation = locations[0].coords;
+
+  try {
+    // Load reminders directly from AsyncStorage (not from React context)
+    const savedReminders = await AsyncStorage.getItem('reminders');
+    if (!savedReminders) {
+      return;
+    }
+
+    const reminders = JSON.parse(savedReminders);
+    const activeReminders = reminders.filter(r => !r.completed);
+
+    if (activeReminders.length === 0) {
+      return;
+    }
+
+    const now = Date.now();
+    const fifteenMinutes = 15 * 60 * 1000;
+    let hasUpdates = false;
+
+    for (const reminder of activeReminders) {
+      let shouldTrigger = false;
+      let matchedLocation = null;
+
+      // Chain mode: Check for nearby chain locations
+      if (reminder.location.isChain) {
+        try {
+          const chainMatch = await checkChainProximity(
+            currentLocation.latitude,
+            currentLocation.longitude,
+            reminder.location.name,
+            5000,
+            reminder.location.radius
+          );
+          if (chainMatch) {
+            shouldTrigger = true;
+            matchedLocation = chainMatch;
+          }
+        } catch (chainError) {
+          console.error('Chain proximity check failed:', chainError);
+        }
+      } else {
+        // Regular mode: Check distance to all locations in the array
+        const locationsToCheck = reminder.location.locations || [{
+          latitude: reminder.location.latitude,
+          longitude: reminder.location.longitude,
+          name: reminder.location.name,
+          address: reminder.location.address,
+        }];
+
+        for (const loc of locationsToCheck) {
+          const distance = calculateDistanceHelper(
+            currentLocation.latitude,
+            currentLocation.longitude,
+            loc.latitude,
+            loc.longitude
+          );
+
+          if (distance <= reminder.location.radius) {
+            shouldTrigger = true;
+            matchedLocation = loc;
+            break;
+          }
+        }
+      }
+
+      if (shouldTrigger) {
+        // Throttle: Only trigger if not triggered in last 15 minutes
+        const lastTriggered = reminder.lastTriggeredAt
+          ? new Date(reminder.lastTriggeredAt).getTime()
+          : 0;
+
+        if (now - lastTriggered >= fifteenMinutes) {
+          // Update reminder in the array
+          reminder.triggeredCount = (reminder.triggeredCount || 0) + 1;
+          reminder.lastTriggeredAt = new Date().toISOString();
+          hasUpdates = true;
+
+          // Send notification
+          let locationText = reminder.location.name;
+          if (reminder.location.isChain && matchedLocation) {
+            locationText = `${matchedLocation.name}${matchedLocation.address ? ` (${matchedLocation.address})` : ''}`;
+          } else if (matchedLocation && matchedLocation.name) {
+            // Multi-location mode: show which specific location was matched
+            locationText = `${matchedLocation.name}${matchedLocation.address ? ` (${matchedLocation.address})` : ''}`;
+          }
+
+          await Notifications.scheduleNotificationAsync({
+            content: {
+              title: 'Forget Me Not!',
+              body: `${reminder.text} at ${locationText}`,
+              data: { reminderId: reminder.id },
+              sound: true,
+            },
+            trigger: null,
+          });
+        }
+      }
+    }
+
+    // Save updated reminders back to AsyncStorage
+    if (hasUpdates) {
+      await AsyncStorage.setItem('reminders', JSON.stringify(reminders));
+    }
+  } catch (taskError) {
+    console.error('Background location task error:', taskError);
   }
 });
 

@@ -2,18 +2,19 @@ import React, { useState } from 'react';
 import {
   View,
   Text,
-  StyleSheet,
   FlatList,
   TouchableOpacity,
   Alert,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useReminders } from '../utils/ReminderContext';
+import { useTheme } from '../utils/ThemeContext';
 import ReminderItem from '../components/ReminderItem';
 
 export default function ReminderHistoryScreen() {
   const { reminders, toggleReminder, deleteReminder } = useReminders();
-  const [filter, setFilter] = useState('all'); // 'all', 'today', 'week', 'month'
+  const { colors, isDark } = useTheme();
+  const [filter, setFilter] = useState('all');
 
   const completedReminders = reminders.filter(r => r.completed);
 
@@ -60,19 +61,30 @@ export default function ReminderHistoryScreen() {
 
   const FilterButton = ({ label, value }) => (
     <TouchableOpacity
-      style={[styles.filterButton, filter === value && styles.filterButtonActive]}
+      className="px-4 py-2 rounded-full"
+      style={{
+        backgroundColor: filter === value ? colors.primary : colors.surfaceGray,
+      }}
       onPress={() => setFilter(value)}
     >
-      <Text style={[styles.filterText, filter === value && styles.filterTextActive]}>
+      <Text
+        className="text-sm font-semibold"
+        style={{
+          color: filter === value ? '#FFFFFF' : colors.textMuted,
+        }}
+      >
         {label}
       </Text>
     </TouchableOpacity>
   );
 
   return (
-    <View style={styles.container}>
-      <View style={styles.header}>
-        <View style={styles.filterContainer}>
+    <View className="flex-1" style={{ backgroundColor: colors.background }}>
+      <View
+        className="p-6 border-b"
+        style={{ backgroundColor: colors.background, borderBottomColor: colors.border }}
+      >
+        <View className="flex-row gap-2 mb-4">
           <FilterButton label="All" value="all" />
           <FilterButton label="Today" value="today" />
           <FilterButton label="Week" value="week" />
@@ -80,23 +92,33 @@ export default function ReminderHistoryScreen() {
         </View>
 
         {completedReminders.length > 0 && (
-          <TouchableOpacity style={styles.clearButton} onPress={handleClearAll}>
-            <Ionicons name="trash-outline" size={20} color="#FF3B30" />
-            <Text style={styles.clearButtonText}>Clear All</Text>
+          <TouchableOpacity
+            className="flex-row items-center gap-1 self-start px-4 py-2 rounded-lg"
+            style={{ backgroundColor: colors.pastelPink }}
+            onPress={handleClearAll}
+          >
+            <Ionicons name="trash-outline" size={18} color={colors.danger} />
+            <Text className="text-sm font-semibold" style={{ color: colors.text }}>Clear All</Text>
           </TouchableOpacity>
         )}
       </View>
 
-      <View style={styles.statsContainer}>
-        <View style={styles.statItem}>
-          <Text style={styles.statNumber}>{completedReminders.length}</Text>
-          <Text style={styles.statLabel}>Completed</Text>
+      <View
+        className="flex-row py-6 px-8 mx-6 my-6 rounded-lg items-center justify-center"
+        style={{ backgroundColor: colors.pastelBlue }}
+      >
+        <View className="flex-1 items-center">
+          <Text className="text-4xl font-bold" style={{ color: colors.text }}>{completedReminders.length}</Text>
+          <Text className="text-sm mt-1 font-medium" style={{ color: colors.text, opacity: 0.8 }}>Completed</Text>
         </View>
-        <View style={styles.divider} />
-        <View style={styles.statItem}>
-          <Text style={styles.statNumber}>{filteredReminders.length}</Text>
-          <Text style={styles.statLabel}>
-            {filter === 'all' ? 'Total' : filter === 'today' ? 'Today' : `This ${filter}`}
+        <View
+          className="w-px h-10"
+          style={{ backgroundColor: isDark ? 'rgba(255,255,255,0.3)' : 'rgba(0,0,0,0.15)' }}
+        />
+        <View className="flex-1 items-center">
+          <Text className="text-4xl font-bold" style={{ color: colors.text }}>{filteredReminders.length}</Text>
+          <Text className="text-sm mt-1 font-medium" style={{ color: colors.text, opacity: 0.8 }}>
+            {filter === 'all' ? 'Showing' : filter === 'today' ? 'Today' : `This ${filter}`}
           </Text>
         </View>
       </View>
@@ -112,12 +134,17 @@ export default function ReminderHistoryScreen() {
           />
         )}
         keyExtractor={(item) => item.id}
-        contentContainerStyle={styles.listContent}
+        contentContainerStyle={{ padding: 24, flexGrow: 1 }}
         ListEmptyComponent={
-          <View style={styles.emptyContainer}>
-            <Ionicons name="checkmark-done-outline" size={80} color="#ccc" />
-            <Text style={styles.emptyText}>No completed reminders</Text>
-            <Text style={styles.emptySubtext}>
+          <View className="flex-1 justify-center items-center pt-16">
+            <View
+              className="w-20 h-20 rounded-full justify-center items-center mb-6"
+              style={{ backgroundColor: colors.pastelPeach }}
+            >
+              <Ionicons name="checkmark-done-outline" size={48} color={colors.text} />
+            </View>
+            <Text className="text-xl font-bold" style={{ color: colors.text }}>No completed reminders</Text>
+            <Text className="text-base mt-2 text-center px-8" style={{ color: colors.textSecondary }}>
               {filter === 'all'
                 ? 'Complete reminders to see them here'
                 : `No reminders completed ${filter === 'today' ? 'today' : `in the last ${filter}`}`}
@@ -128,106 +155,3 @@ export default function ReminderHistoryScreen() {
     </View>
   );
 }
-
-const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: '#f5f5f5',
-  },
-  header: {
-    backgroundColor: '#fff',
-    padding: 16,
-    borderBottomWidth: 1,
-    borderBottomColor: '#e0e0e0',
-  },
-  filterContainer: {
-    flexDirection: 'row',
-    gap: 8,
-    marginBottom: 12,
-  },
-  filterButton: {
-    paddingHorizontal: 16,
-    paddingVertical: 8,
-    borderRadius: 20,
-    backgroundColor: '#f0f0f0',
-  },
-  filterButtonActive: {
-    backgroundColor: '#007AFF',
-  },
-  filterText: {
-    fontSize: 14,
-    fontWeight: '500',
-    color: '#666',
-  },
-  filterTextActive: {
-    color: '#fff',
-  },
-  clearButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-    alignSelf: 'flex-start',
-  },
-  clearButtonText: {
-    color: '#FF3B30',
-    fontSize: 14,
-    fontWeight: '500',
-  },
-  statsContainer: {
-    flexDirection: 'row',
-    backgroundColor: '#fff',
-    paddingVertical: 20,
-    paddingHorizontal: 40,
-    marginHorizontal: 16,
-    marginVertical: 16,
-    borderRadius: 12,
-    alignItems: 'center',
-    justifyContent: 'center',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
-    elevation: 3,
-  },
-  statItem: {
-    flex: 1,
-    alignItems: 'center',
-  },
-  statNumber: {
-    fontSize: 32,
-    fontWeight: 'bold',
-    color: '#007AFF',
-  },
-  statLabel: {
-    fontSize: 14,
-    color: '#666',
-    marginTop: 4,
-  },
-  divider: {
-    width: 1,
-    height: 40,
-    backgroundColor: '#e0e0e0',
-  },
-  listContent: {
-    padding: 16,
-    flexGrow: 1,
-  },
-  emptyContainer: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-    paddingTop: 60,
-  },
-  emptyText: {
-    fontSize: 24,
-    fontWeight: 'bold',
-    color: '#999',
-    marginTop: 16,
-  },
-  emptySubtext: {
-    fontSize: 16,
-    color: '#ccc',
-    marginTop: 8,
-    textAlign: 'center',
-  },
-});

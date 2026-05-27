@@ -17,6 +17,26 @@ const LOCATION_TASK_NAME = 'background-location-task';
 
 type LocationPermissionState = 'full' | 'foreground' | 'denied' | null;
 
+/**
+ * Parse the persisted reminders blob defensively. Stored data can be valid
+ * JSON but the wrong shape (legacy data, manual edits, partial writes); an
+ * unguarded JSON.parse + .filter would then crash the UI or silently kill the
+ * background task. We require an array and drop entries missing a location.
+ */
+function parseStoredReminders(raw: string): Reminder[] {
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(raw);
+  } catch {
+    return [];
+  }
+  if (!Array.isArray(parsed)) return [];
+  return parsed.filter(
+    (r): r is Reminder =>
+      r != null && typeof r === 'object' && 'location' in r && r.location != null
+  );
+}
+
 /** A coordinate pair, the minimum needed for proximity checks. */
 interface Coords {
   latitude: number;
@@ -92,6 +112,15 @@ export const ReminderProvider = ({ children }: { children: ReactNode }) => {
     // Only save after initial load is complete
     if (isLoaded) {
       saveReminders();
+
+      // Stop background location tracking once nothing needs geofencing,
+      // and (re)start it when active reminders exist and we're permitted.
+      const hasActive = reminders.some((r) => !r.completed);
+      if (!hasActive && isGeofencingActive) {
+        stopGeofencing();
+      } else if (hasActive && !isGeofencingActive && locationPermission === 'full') {
+        setupGeofencing();
+      }
     }
   }, [reminders, isLoaded]);
 
@@ -118,7 +147,7 @@ export const ReminderProvider = ({ children }: { children: ReactNode }) => {
     try {
       const savedReminders = await AsyncStorage.getItem('reminders');
       if (savedReminders) {
-        setReminders(JSON.parse(savedReminders));
+        setReminders(parseStoredReminders(savedReminders));
       }
       setIsLoaded(true);
     } catch (error) {
@@ -201,8 +230,14 @@ export const ReminderProvider = ({ children }: { children: ReactNode }) => {
         return;
       }
 
-      // Only start if not already active
-      if (isGeofencingActive) {
+      // Reconcile with the OS, not just React state: isGeofencingActive
+      // resets to false on every app restart while the registered task may
+      // already be running, which would otherwise start it twice.
+      const alreadyRunning = await Location.hasStartedLocationUpdatesAsync(
+        LOCATION_TASK_NAME
+      );
+      if (alreadyRunning) {
+        setIsGeofencingActive(true);
         return;
       }
 
@@ -220,6 +255,23 @@ export const ReminderProvider = ({ children }: { children: ReactNode }) => {
       setIsGeofencingActive(true);
     } catch (error) {
       console.error('Error setting up geofencing:', error);
+    }
+  };
+
+  // Tear down background location tracking. Called when no active reminders
+  // remain so we don't keep draining battery / holding location access (a
+  // real privacy concern) once there's nothing left to geofence for.
+  const stopGeofencing = async () => {
+    try {
+      const running = await Location.hasStartedLocationUpdatesAsync(
+        LOCATION_TASK_NAME
+      );
+      if (running) {
+        await Location.stopLocationUpdatesAsync(LOCATION_TASK_NAME);
+      }
+      setIsGeofencingActive(false);
+    } catch (error) {
+      console.error('Error stopping geofencing:', error);
     }
   };
 
@@ -275,7 +327,11 @@ export const ReminderProvider = ({ children }: { children: ReactNode }) => {
         if (shouldTrigger) {
           // Throttle: Only trigger if not triggered in last 15 minutes
           const now = Date.now();
-          const lastTriggered = reminder.lastTriggeredAt ? new Date(reminder.lastTriggeredAt).getTime() : 0;
+          // A malformed timestamp yields NaN, and `now - NaN >= window` is
+          // always false — which would throttle the reminder forever. Treat
+          // an unparseable value as "never triggered".
+          const parsedLast = reminder.lastTriggeredAt ? new Date(reminder.lastTriggeredAt).getTime() : 0;
+          const lastTriggered = Number.isFinite(parsedLast) ? parsedLast : 0;
           const fifteenMinutes = 15 * 60 * 1000;
 
           if (now - lastTriggered >= fifteenMinutes) {
@@ -479,7 +535,7 @@ TaskManager.defineTask<{ locations: Location.LocationObject[] }>(
       return;
     }
 
-    const reminders: Reminder[] = JSON.parse(savedReminders);
+    const reminders = parseStoredReminders(savedReminders);
     const activeReminders = reminders.filter((r) => !r.completed);
 
     if (activeReminders.length === 0) {
@@ -537,10 +593,12 @@ TaskManager.defineTask<{ locations: Location.LocationObject[] }>(
       }
 
       if (shouldTrigger) {
-        // Throttle: Only trigger if not triggered in last 15 minutes
-        const lastTriggered = reminder.lastTriggeredAt
+        // Throttle: Only trigger if not triggered in last 15 minutes.
+        // Guard against a malformed timestamp (NaN) permanently throttling.
+        const parsedLast = reminder.lastTriggeredAt
           ? new Date(reminder.lastTriggeredAt).getTime()
           : 0;
+        const lastTriggered = Number.isFinite(parsedLast) ? parsedLast : 0;
 
         if (now - lastTriggered >= fifteenMinutes) {
           // Update reminder in the array

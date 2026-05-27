@@ -5,8 +5,18 @@
 
 import type { LocationData } from '../types';
 
-// API key loaded from environment variable for security
+// API key loaded from environment variable for security.
+// NOTE: EXPO_PUBLIC_ vars are embedded in the client bundle and are readable
+// by anyone who inspects the app. This key MUST be restricted in the Google
+// Cloud console (by app bundle id / SHA and to the Places API only) — the
+// app code cannot keep it secret.
 const GOOGLE_PLACES_API_KEY = process.env.EXPO_PUBLIC_GOOGLE_PLACES_API_KEY || '';
+
+// Dev-only logger. Avoids shipping user search queries / precise coordinates /
+// raw API responses to production device logs and crash aggregators.
+const debugLog = (...args: unknown[]) => {
+  if (__DEV__) console.log(...args);
+};
 
 // New Places API (v1) endpoints
 const AUTOCOMPLETE_API_URL = 'https://places.googleapis.com/v1/places:autocomplete';
@@ -222,13 +232,22 @@ export const findNearbyChainLocations = async (
     }
 
     if (data.results && data.results.length > 0) {
-      return data.results.map((place): NearbyPlaceResult => ({
-        name: place.name,
-        address: place.vicinity,
-        latitude: place.geometry!.location!.lat,
-        longitude: place.geometry!.location!.lng,
-        placeId: place.place_id,
-      }));
+      // Some place types come back without geometry; force-unwrapping it
+      // would throw inside .map and (via the catch) silently drop ALL
+      // results. Filter to results with finite coordinates first.
+      return data.results
+        .filter(
+          (place) =>
+            Number.isFinite(place.geometry?.location?.lat) &&
+            Number.isFinite(place.geometry?.location?.lng)
+        )
+        .map((place): NearbyPlaceResult => ({
+          name: place.name,
+          address: place.vicinity,
+          latitude: place.geometry!.location!.lat,
+          longitude: place.geometry!.location!.lng,
+          placeId: place.place_id,
+        }));
     }
 
     return [];
@@ -458,15 +477,15 @@ export const autocompleteSearch = async (
   userLocation: UserLocationBias | LocationData | null = null
 ): Promise<PlaceResult[]> => {
   try {
-    console.log('[autocompleteSearch] Query:', query);
+    debugLog('[autocompleteSearch] Query:', query);
 
     if (!query || query.length < 2) {
-      console.log('[autocompleteSearch] Query too short');
+      debugLog('[autocompleteSearch] Query too short');
       return [];
     }
 
     // New Places API (v1) - uses POST with JSON body
-    console.log('[autocompleteSearch] Using New Places API (v1)');
+    debugLog('[autocompleteSearch] Using New Places API (v1)');
 
     // Build request body
     const requestBody: {
@@ -496,7 +515,7 @@ export const autocompleteSearch = async (
           radius: 50000.0, // 50km (~31 miles) - max allowed by API
         },
       };
-      console.log('[autocompleteSearch] Using location bias:', userLocation);
+      debugLog('[autocompleteSearch] Using location bias:', userLocation);
     }
 
     const response = await fetch(AUTOCOMPLETE_API_URL, {
@@ -509,7 +528,7 @@ export const autocompleteSearch = async (
     });
 
     const data = (await response.json()) as AutocompleteApiResponse;
-    console.log('[autocompleteSearch] Response:', data);
+    debugLog('[autocompleteSearch] Response:', data);
 
     if (!response.ok) {
       console.error('Autocomplete API error:', response.status, data);
@@ -517,7 +536,7 @@ export const autocompleteSearch = async (
     }
 
     if (data.suggestions && data.suggestions.length > 0) {
-      console.log('[autocompleteSearch] Found', data.suggestions.length, 'suggestions');
+      debugLog('[autocompleteSearch] Found', data.suggestions.length, 'suggestions');
 
       // Get place details for each suggestion to get coordinates (up to 15 results)
       const placesWithDetails = await Promise.all(
@@ -544,11 +563,11 @@ export const autocompleteSearch = async (
         (place): place is PlaceResult =>
           place !== null && place.latitude !== null && place.longitude !== null
       );
-      console.log('[autocompleteSearch] Returning', filtered.length, 'places with coordinates');
+      debugLog('[autocompleteSearch] Returning', filtered.length, 'places with coordinates');
       return filtered;
     }
 
-    console.log('[autocompleteSearch] No suggestions found');
+    debugLog('[autocompleteSearch] No suggestions found');
     return [];
   } catch (error) {
     console.error('Error in autocomplete search:', error);
@@ -580,7 +599,9 @@ export const searchSpecificPlaces = async (
  */
 export const getPlaceDetailsNew = async (placeId: string): Promise<PlaceDetails | null> => {
   try {
-    const url = `${PLACE_DETAILS_URL}/${placeId}`;
+    // Encode the untrusted placeId before putting it in the URL path so a
+    // value containing /, ?, # or .. can't alter the request target.
+    const url = `${PLACE_DETAILS_URL}/${encodeURIComponent(placeId)}`;
 
     const response = await fetch(url, {
       method: 'GET',

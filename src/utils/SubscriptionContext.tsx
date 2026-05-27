@@ -3,12 +3,14 @@ import React, {
   useContext,
   useState,
   useEffect,
+  useRef,
   ReactNode,
 } from 'react';
 import { Platform, Alert } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import Purchases, {
   CustomerInfo,
+  CustomerInfoUpdateListener,
   PurchasesOffering,
   PurchasesPackage,
 } from 'react-native-purchases';
@@ -71,35 +73,51 @@ export function SubscriptionProvider({ children }: { children: ReactNode }) {
   const [offerings, setOfferings] = useState<PurchasesOffering | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [customerInfo, setCustomerInfo] = useState<CustomerInfo | null>(null);
+  const customerInfoListener = useRef<CustomerInfoUpdateListener | null>(null);
 
   useEffect(() => {
     initializePurchases();
+    // Remove the RevenueCat listener on unmount so it doesn't accumulate
+    // across remounts / Fast Refresh.
+    return () => {
+      if (customerInfoListener.current) {
+        Purchases.removeCustomerInfoUpdateListener(customerInfoListener.current);
+        customerInfoListener.current = null;
+      }
+    };
   }, []);
 
   const initializePurchases = async () => {
     try {
-      // Load cached subscription status first for instant UI
-      await loadCachedSubscription();
-
-      // Configure RevenueCat
       const apiKey = Platform.OS === 'ios' ? REVENUECAT_API_KEY_IOS : REVENUECAT_API_KEY_ANDROID;
+      // Real RevenueCat keys start with appl_ (iOS) or goog_ (Android). This
+      // is stricter than a placeholder substring check and won't be fooled by
+      // a mistyped placeholder.
+      const hasRealKey =
+        apiKey.startsWith('appl_') || apiKey.startsWith('goog_');
 
-      // Only configure if we have real API keys
-      if (apiKey && !apiKey.includes('your_')) {
+      if (hasRealKey) {
+        // Show cached status immediately for snappy UI, but treat it as
+        // optimistic only — checkSubscription() below reconciles against the
+        // authoritative RevenueCat entitlement and overwrites it.
+        await loadCachedSubscription();
+
         await Purchases.configure({ apiKey });
 
-        // Add listener for subscription changes
-        Purchases.addCustomerInfoUpdateListener((info) => {
-          handleCustomerInfoUpdate(info);
-        });
+        // Keep the listener handle so we can remove it on unmount.
+        customerInfoListener.current = (info) => handleCustomerInfoUpdate(info);
+        Purchases.addCustomerInfoUpdateListener(customerInfoListener.current);
 
-        // Check current subscription status
+        // Authoritative check — this is the real entitlement gate.
         await checkSubscription();
-
-        // Load offerings
         await loadOfferings();
       } else {
+        // Demo mode: no billing configured, so there can be no real purchase.
+        // Do NOT honor a cached isPremium flag here — otherwise editing local
+        // storage would permanently unlock premium with nothing to verify it.
         console.log('[Subscription] Running in demo mode - no RevenueCat API keys configured');
+        setIsPremium(false);
+        setSubscriptionStatus('free');
       }
     } catch (error) {
       console.error('[Subscription] Error initializing:', error);

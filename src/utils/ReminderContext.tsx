@@ -124,7 +124,16 @@ export const ReminderProvider = ({ children }: { children: ReactNode }) => {
         setLocationPermission('denied');
       }
     } catch (error) {
-      console.error('Error requesting permissions:', error);
+      // Requesting can throw when the platform usage-description strings
+      // aren't present (e.g. running in Expo Go, which uses a generic
+      // Info.plist). Treat that as "denied" so the UI shows the normal
+      // permission prompt instead of getting stuck, and log it quietly —
+      // it's an environment limitation, not an app error.
+      setLocationPermission('denied');
+      console.warn(
+        'Location permission unavailable in this environment (expected in Expo Go):',
+        error instanceof Error ? error.message : error
+      );
     }
   };
 

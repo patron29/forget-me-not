@@ -283,6 +283,8 @@ export default function ReminderListScreen() {
             keyExtractor={(item) => item.id}
             contentContainerStyle={{ padding: 24, flexGrow: 1 }}
             showsVerticalScrollIndicator={false}
+            keyboardDismissMode="on-drag"
+            keyboardShouldPersistTaps="handled"
             ListEmptyComponent={
               <EmptyState
                 icon="location-outline"
@@ -296,13 +298,14 @@ export default function ReminderListScreen() {
 
         {/* Input Section */}
         <Animated.View
-          className="px-6 py-6"
+          className="px-6 pt-3"
           style={{
             opacity: fadeAnim,
-            // Only add the home-indicator inset when the keyboard is hidden;
-            // while it's open the keyboard already occupies that space, so
-            // adding the inset would leave a large gap above it.
-            paddingBottom: keyboardVisible ? 12 : 24 + insets.bottom,
+            // When the keyboard is open the input sits just above it (small
+            // pad). When closed, this screen's tab bar sits below, so only a
+            // modest bottom pad is needed — the earlier 24 + safe-area inset
+            // left a large empty gap above the tab bar.
+            paddingBottom: keyboardVisible ? 12 : 16,
             backgroundColor: colors.background,
           }}
         >

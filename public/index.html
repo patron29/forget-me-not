@@ -6,7 +6,10 @@
   <title>Forget Me Not</title>
 
   <!-- Google Maps JavaScript API - Using v=beta for new Places API -->
-  <script src="https://maps.googleapis.com/maps/api/js?key=AIzaSyAlvQ3DaQkcbwBy0nIvSCT9acC_kBi96UA&libraries=places&v=weekly"></script>
+  <!-- NOTE: never hardcode a real key here. Inject it at build time from an
+       env var (e.g. EXPO_PUBLIC_GOOGLE_PLACES_API_KEY) and restrict the key
+       to your domain/app in the Google Cloud console. -->
+  <script src="https://maps.googleapis.com/maps/api/js?key=YOUR_GOOGLE_MAPS_API_KEY&libraries=places&v=weekly"></script>
 
   <style>
     * {

@@ -5,7 +5,7 @@ import React, {
   useEffect,
   ReactNode,
 } from 'react';
-import { useColorScheme } from 'react-native';
+import { useColorScheme, Appearance } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import type { ThemeMode } from '../types';
 
@@ -209,12 +209,25 @@ export interface ThemeContextValue {
 const ThemeContext = createContext<ThemeContextValue | undefined>(undefined);
 
 export function ThemeProvider({ children }: { children: ReactNode }) {
-  const systemColorScheme = useColorScheme();
+  // useColorScheme is the primary source, but it can lag / report stale values
+  // in some setups (Expo Go, new architecture). Back it with an explicit
+  // Appearance listener so the device scheme is read reliably and tracks live
+  // light/dark toggles.
+  const hookScheme = useColorScheme();
+  const [listenerScheme, setListenerScheme] = useState(
+    Appearance.getColorScheme()
+  );
   const [themeMode, setThemeMode] = useState<ThemeMode>('system');
   const [isLoaded, setIsLoaded] = useState(false);
 
+  const systemColorScheme = listenerScheme ?? hookScheme;
+
   useEffect(() => {
     loadThemePreference();
+    const sub = Appearance.addChangeListener(({ colorScheme }) => {
+      setListenerScheme(colorScheme);
+    });
+    return () => sub.remove();
   }, []);
 
   const loadThemePreference = async () => {

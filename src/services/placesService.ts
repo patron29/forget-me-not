@@ -18,6 +18,18 @@ const debugLog = (...args: unknown[]) => {
   if (__DEV__) console.log(...args);
 };
 
+/**
+ * Thrown when the Places API rejects the request for a key/config reason
+ * (expired/invalid/unrestricted key, API not enabled). Lets the UI tell the
+ * user "search unavailable" rather than silently showing no results.
+ */
+export class PlacesApiKeyError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = 'PlacesApiKeyError';
+  }
+}
+
 // New Places API (v1) endpoints
 const AUTOCOMPLETE_API_URL = 'https://places.googleapis.com/v1/places:autocomplete';
 const PLACE_DETAILS_URL = 'https://places.googleapis.com/v1/places';
@@ -532,6 +544,15 @@ export const autocompleteSearch = async (
 
     if (!response.ok) {
       console.error('Autocomplete API error:', response.status, data);
+      // A 400/401/403 here is a configuration problem (expired / invalid /
+      // unrestricted key, or the Places API not enabled) — not "no matches".
+      // Throw so the UI can show "search unavailable" instead of a misleading
+      // empty-results state.
+      if (response.status === 400 || response.status === 401 || response.status === 403) {
+        throw new PlacesApiKeyError(
+          (data as any)?.error?.message || 'Places API request was rejected.'
+        );
+      }
       return [];
     }
 
@@ -570,6 +591,8 @@ export const autocompleteSearch = async (
     debugLog('[autocompleteSearch] No suggestions found');
     return [];
   } catch (error) {
+    // Let key/config errors propagate so the UI can show "search unavailable".
+    if (error instanceof PlacesApiKeyError) throw error;
     console.error('Error in autocomplete search:', error);
     return [];
   }

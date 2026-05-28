@@ -15,7 +15,7 @@ import type { TextStyle } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import * as Location from 'expo-location';
 import { useNavigation } from '@react-navigation/native';
-import { autocompleteSearch } from '../services/placesService';
+import { autocompleteSearch, PlacesApiKeyError } from '../services/placesService';
 import type { PlaceResult } from '../services/placesService';
 import { useSubscription } from '../utils/SubscriptionContext';
 import { useTheme } from '../utils/ThemeContext';
@@ -61,6 +61,7 @@ export default function LocationPicker({ visible, onClose, onLocationSelect }: L
   const [addressSearchQuery, setAddressSearchQuery] = useState<string>('');
   const [addressSearchResults, setAddressSearchResults] = useState<PlaceResult[]>([]);
   const [searchingAddresses, setSearchingAddresses] = useState<boolean>(false);
+  const [searchError, setSearchError] = useState<boolean>(false);
   const [useImperial, setUseImperial] = useState<boolean>(false);
 
   const isMountedRef = useRef<boolean>(true);
@@ -120,6 +121,7 @@ export default function LocationPicker({ visible, onClose, onLocationSelect }: L
 
     if (addressSearchQuery.length >= 3) {
       setSearchingAddresses(true);
+      setSearchError(false);
 
       searchTimeoutRef.current = setTimeout(async () => {
         try {
@@ -134,12 +136,16 @@ export default function LocationPicker({ visible, onClose, onLocationSelect }: L
           if (isMountedRef.current) {
             setAddressSearchResults([]);
             setSearchingAddresses(false);
+            // A PlacesApiKeyError means search is misconfigured (e.g. expired
+            // key), not "no matches" — flag it so we show a clear message.
+            setSearchError(error instanceof PlacesApiKeyError);
           }
         }
       }, 300);
     } else {
       setAddressSearchResults([]);
       setSearchingAddresses(false);
+      setSearchError(false);
     }
 
     return () => {
@@ -529,7 +535,19 @@ export default function LocationPicker({ visible, onClose, onLocationSelect }: L
               </View>
             )}
 
-            {!searchingAddresses && addressSearchQuery.length >= 3 && addressSearchResults.length === 0 && (
+            {!searchingAddresses && searchError && (
+              <View
+                className="flex-row items-center justify-center p-4 gap-2 rounded-lg mt-2"
+                style={{ backgroundColor: colors.warningLight }}
+              >
+                <Ionicons name="warning-outline" size={20} color={colors.warning} />
+                <Text className="text-sm flex-1" style={{ color: colors.warning }}>
+                  Location search is unavailable right now. Please try again later.
+                </Text>
+              </View>
+            )}
+
+            {!searchingAddresses && !searchError && addressSearchQuery.length >= 3 && addressSearchResults.length === 0 && (
               <View
                 className="flex-row items-center justify-center p-4 gap-2 rounded-lg mt-2"
                 style={{ backgroundColor: colors.surfaceGray }}

@@ -11,6 +11,7 @@ import {
   Image,
   KeyboardAvoidingView,
   Keyboard,
+  Linking,
   Platform,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
@@ -31,7 +32,7 @@ import type { RootStackParamList } from '../navigation';
 export default function ReminderListScreen() {
   const navigation =
     useNavigation<NativeStackNavigationProp<RootStackParamList>>();
-  const { reminders, addReminder, toggleReminder, deleteReminder, updateReminder, locationPermission } = useReminders();
+  const { reminders, addReminder, toggleReminder, deleteReminder, updateReminder, locationPermission, notificationPermission } = useReminders();
   const { colors, isDark } = useTheme();
 
   // Get subscription status
@@ -58,6 +59,23 @@ export default function ReminderListScreen() {
   const remainingReminders = isPremium ? Infinity : Math.max(0, FREE_TIER_LIMITS.MAX_REMINDERS - activeReminders.length);
   const isNearLimit = !isPremium && remainingReminders <= 2;
   const isAtLimit = !isPremium && remainingReminders === 0;
+
+  // One warning at a time, most severe first: reminders silently never firing
+  // is the app's worst failure mode, so tell the user exactly what's wrong.
+  const permissionWarning =
+    locationPermission === 'denied'
+      ? 'Location access is off — reminders can’t work without it.'
+      : locationPermission === 'foreground'
+        ? 'Location is set to “While Using” — reminders only fire with “Always” access.'
+        : notificationPermission === 'denied'
+          ? 'Notifications are off — you won’t see reminders when you arrive.'
+          : null;
+
+  const openSystemSettings = () => {
+    Linking.openSettings().catch(() => {
+      Alert.alert('Unable to open Settings', 'Please open the system Settings app manually.');
+    });
+  };
 
   useEffect(() => {
     Animated.timing(fadeAnim, {
@@ -256,16 +274,26 @@ export default function ReminderListScreen() {
           )}
         </Animated.View>
 
-        {locationPermission === 'denied' && (
-          <View
+        {permissionWarning && (
+          <TouchableOpacity
             className="flex-row items-center gap-2 py-4 px-6 mx-6 mb-4 rounded-lg"
             style={{ backgroundColor: colors.warningLight, borderWidth: 1, borderColor: colors.warning }}
+            onPress={openSystemSettings}
+            activeOpacity={0.7}
+            accessibilityRole="button"
+            accessibilityLabel={`${permissionWarning} Opens system settings.`}
           >
             <Ionicons name="warning-outline" size={20} color={colors.warning} />
-            <Text className="flex-1 text-sm font-medium" style={{ color: colors.warning }}>
-              Location permission required for reminders
-            </Text>
-          </View>
+            <View className="flex-1">
+              <Text className="text-sm font-medium" style={{ color: colors.warning }}>
+                {permissionWarning}
+              </Text>
+              <Text className="text-xs mt-0.5" style={{ color: colors.warning }}>
+                Tap to open Settings
+              </Text>
+            </View>
+            <Ionicons name="chevron-forward" size={16} color={colors.warning} />
+          </TouchableOpacity>
         )}
 
         {/* Reminders List */}

@@ -8,14 +8,22 @@
     "noEmit": true,
     "skipLibCheck": true,
     "paths": {
-      "@/*": ["./src/*"]
+      "@/*": [
+        "./src/*"
+      ]
     }
   },
   "include": [
     "**/*.ts",
     "**/*.tsx",
     "src/**/*.js",
-    "App.js"
+    "App.js",
+    "nativewind-env.d.ts"
   ],
-  "exclude": ["node_modules", ".expo", "babel.config.js", "metro.config.js"]
+  "exclude": [
+    "node_modules",
+    ".expo",
+    "babel.config.js",
+    "metro.config.js"
+  ]
 }

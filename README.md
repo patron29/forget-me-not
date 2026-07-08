@@ -171,6 +171,65 @@ The app uses Expo Location's geofencing capabilities to monitor your location in
 3. Try increasing the radius for reminders
 4. Ensure the app has background location permission
 
+## Production Release Checklist
+
+The code and build config are release-ready, but these steps need accounts or
+store listings only a human can set up:
+
+### Secrets & API keys
+
+- [ ] **Rotate the Google Places API key.** An earlier key was committed to
+      this repo's history (`public/index.html`, removed in `cf404ff`). Treat
+      it as public: delete or regenerate it in Google Cloud Console, then put
+      the new key in `.env` and in EAS env vars.
+- [ ] **Restrict the Places key** in Google Cloud Console: API restriction to
+      "Places API (New)", application restriction to iOS bundle id
+      `com.forgetmenot.app` (the app already sends the required
+      identification headers) and, for Android, the package name + release
+      signing SHA-1 (also set `EXPO_PUBLIC_ANDROID_CERT_SHA1`). Set a daily
+      quota cap as a spend backstop.
+- [ ] **Create a RevenueCat project** with products `premium_monthly` /
+      `premium_yearly`, an entitlement named `premium`, and a default
+      offering containing both packages. Set `EXPO_PUBLIC_REVENUECAT_IOS_KEY`
+      and `EXPO_PUBLIC_REVENUECAT_ANDROID_KEY` in `.env` and EAS env vars —
+      without them the paywall runs in demo mode and cannot charge anyone.
+- [ ] For each secret, register it for builds:
+      `eas env:create --environment production --name <NAME> --value <VALUE>`
+
+### Store listings
+
+- [ ] **Host the privacy policy** (`PRIVACY_POLICY.md`) at a public URL — both
+      stores require one, and Google Play's sensitive-permission declaration
+      for `ACCESS_BACKGROUND_LOCATION` depends on it.
+- [ ] **Google Play**: complete the background-location declaration (include a
+      short video of the reminder flow) and the Data Safety form.
+- [ ] **App Store**: after the listing exists, put the numeric App Store ID in
+      `IOS_APP_STORE_ID` (`src/screens/SettingsScreen.tsx`) so the iOS "Rate
+      the App" row appears. Expect review questions about background location;
+      the reviewer notes should explain the geofenced-reminder use case.
+- [ ] **Notification icon (Android)**: `expo-notifications` currently uses the
+      full-color app icon; supply a white-on-transparent ~96×96 PNG and point
+      the `expo-notifications` plugin `icon` at it, or status-bar icons render
+      as a blank square.
+- [ ] Verify the support address `support@forgetmenot.app` (or change
+      `SUPPORT_EMAIL` in `src/screens/SettingsScreen.tsx`).
+
+### Building & submitting
+
+```bash
+eas build --profile production --platform all
+eas submit --platform android   # uses ./google-service-account.json (gitignored)
+eas submit --platform ios       # prompts for Apple credentials on first run
+```
+
+`production` builds auto-increment the Android `versionCode`; bump the
+user-facing `version` in `app.json` manually per release.
+
+### Nice-to-have before launch
+
+- [ ] Add a crash-reporting SDK (e.g. `@sentry/react-native`) — crashes are
+      currently only visible in local device logs.
+
 ## License
 
 MIT

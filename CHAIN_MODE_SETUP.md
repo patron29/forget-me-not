@@ -19,20 +19,29 @@ For the best experience, you'll need a Google Places API key:
 
 1. Go to [Google Cloud Console](https://console.cloud.google.com/)
 2. Create a new project or select an existing one
-3. Enable the **Places API**
+3. Enable the **Places API (New)** (all requests use the v1 endpoints)
 4. Create credentials → API Key
-5. Restrict the API key to "Places API" for security
+5. Restrict the API key to "Places API (New)" and to your app identifiers for security
 6. Copy your API key
 
 ### 2. Add Your API Key to the App
 
-Open `src/services/placesService.js` and replace `YOUR_API_KEY_HERE` with your actual API key:
+The key is read from the `EXPO_PUBLIC_GOOGLE_PLACES_API_KEY` environment
+variable — never hardcode it in source. Copy `.env.example` to `.env` (which
+is gitignored) and set your key there:
 
-```javascript
-const GOOGLE_PLACES_API_KEY = 'AIzaSyC...your-actual-key-here';
+```bash
+EXPO_PUBLIC_GOOGLE_PLACES_API_KEY=AIzaSyC...your-actual-key-here
 ```
 
-**Important:** Never commit your API key to public repositories. Consider using environment variables for production.
+For EAS builds, set the same variable as an EAS environment variable:
+
+```bash
+eas env:create --environment production --name EXPO_PUBLIC_GOOGLE_PLACES_API_KEY --value AIzaSyC...
+```
+
+**Important:** Never commit a real API key. `EXPO_PUBLIC_` values are embedded
+in the app bundle, so also restrict the key in the Google Cloud console.
 
 ### 3. (Optional) Add Billing to Google Cloud
 

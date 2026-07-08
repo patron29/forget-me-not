@@ -23,6 +23,8 @@ export default function PaywallScreen({ navigation }: RootStackScreenProps<'Payw
     offerings,
     purchasePackage,
     restorePurchases,
+    refreshOfferings,
+    isConfigured,
     isLoading,
     isPremium,
   } = useSubscription();
@@ -45,12 +47,33 @@ export default function PaywallScreen({ navigation }: RootStackScreenProps<'Payw
     const packageToPurchase = selectedPlan === 'yearly' ? yearlyPackage : monthlyPackage;
 
     if (!packageToPurchase) {
-      // Demo mode (no RevenueCat offering configured). Use the RN Alert API —
-      // the web `alert()` global is undefined on native and would throw.
-      Alert.alert(
-        'Demo Mode',
-        'In production, this would initiate the purchase flow.'
-      );
+      if (!isConfigured) {
+        // Demo mode (no RevenueCat keys configured — dev/test builds only).
+        // Use the RN Alert API — the web `alert()` global is undefined on
+        // native and would throw.
+        Alert.alert(
+          'Demo Mode',
+          'In production, this would initiate the purchase flow.'
+        );
+      } else if (offerings) {
+        // Offerings loaded but nothing matches our product ids — a store
+        // configuration problem, so retrying can't help.
+        Alert.alert(
+          'Purchases Temporarily Unavailable',
+          'Subscriptions can’t be purchased right now. Please try again later.'
+        );
+      } else {
+        // Billing is live but offerings didn't load (network hiccup, store
+        // outage). Give the user an honest error and a retry, not demo copy.
+        Alert.alert(
+          'Store Unavailable',
+          "We couldn't load subscription options. Please check your connection and try again.",
+          [
+            { text: 'Cancel', style: 'cancel' },
+            { text: 'Retry', onPress: () => { refreshOfferings(); } },
+          ]
+        );
+      }
       return;
     }
 

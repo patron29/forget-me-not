@@ -4,6 +4,7 @@ import {
   Text,
   TouchableOpacity,
   ScrollView,
+  Alert,
   Linking,
   Platform,
 } from 'react-native';
@@ -21,6 +22,20 @@ import type { ThemeMode } from '../types';
 // all exist on the root param list, so the loosely-composed navigation prop is
 // fine here; we keep it typed via the root stack props.
 type IoniconName = ComponentProps<typeof Ionicons>['name'];
+
+// TODO(release): set to the numeric App Store ID once the app is live (App
+// Store Connect → App Information). The iOS "Rate the App" row stays hidden
+// until then so users are never sent to a dead store page.
+const IOS_APP_STORE_ID = '';
+const SUPPORT_EMAIL = 'support@forgetmenot.app';
+
+// Linking.openURL rejects when no handler exists (e.g. no mail app
+// configured); unhandled, that's a silent dead tap or a dev-mode redbox.
+const openExternalLink = (url: string) => {
+  Linking.openURL(url).catch(() => {
+    Alert.alert('Unable to Open Link', 'No app is available to handle this link.');
+  });
+};
 
 export default function SettingsScreen({ navigation }: { navigation: any }) {
   // TODO: type with navigation param list (tab + parent stack composite)
@@ -53,9 +68,9 @@ export default function SettingsScreen({ navigation }: { navigation: any }) {
   const handleManageSubscription = () => {
     // Open platform-specific subscription management
     if (Platform.OS === 'ios') {
-      Linking.openURL('https://apps.apple.com/account/subscriptions');
+      openExternalLink('https://apps.apple.com/account/subscriptions');
     } else {
-      Linking.openURL('https://play.google.com/store/account/subscriptions');
+      openExternalLink('https://play.google.com/store/account/subscriptions');
     }
   };
 
@@ -72,7 +87,19 @@ export default function SettingsScreen({ navigation }: { navigation: any }) {
   };
 
   const openSupport = () => {
-    Linking.openURL('mailto:support@forgetmenot.app'); // Replace with your support email
+    openExternalLink(`mailto:${SUPPORT_EMAIL}`);
+  };
+
+  // Hide the rate row on iOS until a real App Store ID exists; the Android
+  // Play URL is derived from the package name and works once published.
+  const canRateApp = Platform.OS !== 'ios' || IOS_APP_STORE_ID.length > 0;
+
+  const handleRateApp = () => {
+    if (Platform.OS === 'ios') {
+      openExternalLink(`https://apps.apple.com/app/id${IOS_APP_STORE_ID}`);
+    } else {
+      openExternalLink('https://play.google.com/store/apps/details?id=com.forgetmenot.app');
+    }
   };
 
   const SettingsRow = ({
@@ -254,20 +281,17 @@ export default function SettingsScreen({ navigation }: { navigation: any }) {
             subtitle="Get help with the app"
             onPress={openSupport}
           />
-          <View className="h-px ml-16" style={{ backgroundColor: colors.border }} />
-          <SettingsRow
-            icon="star-outline"
-            title="Rate the App"
-            subtitle="Love Forget Me Not? Leave a review!"
-            onPress={() => {
-              // Replace with your app store URLs
-              if (Platform.OS === 'ios') {
-                Linking.openURL('https://apps.apple.com/app/id123456789');
-              } else {
-                Linking.openURL('https://play.google.com/store/apps/details?id=com.forgetmenot.app');
-              }
-            }}
-          />
+          {canRateApp && (
+            <>
+              <View className="h-px ml-16" style={{ backgroundColor: colors.border }} />
+              <SettingsRow
+                icon="star-outline"
+                title="Rate the App"
+                subtitle="Love Forget Me Not? Leave a review!"
+                onPress={handleRateApp}
+              />
+            </>
+          )}
         </View>
 
         {/* Legal Section */}

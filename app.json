@@ -16,6 +16,7 @@
       "supportsTablet": true,
       "bundleIdentifier": "com.forgetmenot.app",
       "infoPlist": {
+        "ITSAppUsesNonExemptEncryption": false,
         "NSLocationWhenInUseUsageDescription": "This app uses your location to remind you of tasks when you arrive at specific places.",
         "NSLocationAlwaysAndWhenInUseUsageDescription": "This app uses your location to remind you of tasks when you arrive at specific places, even when the app is in the background.",
         "UIBackgroundModes": [
@@ -66,9 +67,12 @@
         {
           "microphonePermission": "Allow Forget Me Not to use the microphone so you can add reminders by voice.",
           "speechRecognitionPermission": "Allow Forget Me Not to recognize your speech so you can add reminders by voice.",
-          "androidSpeechServicePackages": ["com.google.android.googlequicksearchbox"]
+          "androidSpeechServicePackages": [
+            "com.google.android.googlequicksearchbox"
+          ]
         }
-      ]
+      ],
+      "@react-native-community/datetimepicker"
     ],
     "extra": {
       "eas": {

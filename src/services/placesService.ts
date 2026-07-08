@@ -3,6 +3,7 @@
  * Finds nearby locations matching a business name
  */
 
+import { Platform } from 'react-native';
 import type { LocationData } from '../types';
 
 // API key loaded from environment variable for security.
@@ -11,6 +12,50 @@ import type { LocationData } from '../types';
 // Cloud console (by app bundle id / SHA and to the Places API only) — the
 // app code cannot keep it secret.
 const GOOGLE_PLACES_API_KEY = process.env.EXPO_PUBLIC_GOOGLE_PLACES_API_KEY || '';
+
+// Must match ios.bundleIdentifier / android.package in app.json. Google uses
+// these headers to enforce application restrictions on the API key; without
+// them an app-restricted key rejects every request.
+const APP_BUNDLE_ID = 'com.forgetmenot.app';
+// Android app restriction additionally requires the signing certificate's
+// SHA-1 (find it in the Play Console under App integrity after the first
+// upload, or via `eas credentials`). Optional until then.
+const ANDROID_CERT_SHA1 = process.env.EXPO_PUBLIC_ANDROID_CERT_SHA1 || '';
+
+const appIdentificationHeaders: Record<string, string> =
+  Platform.OS === 'ios'
+    ? { 'X-Ios-Bundle-Identifier': APP_BUNDLE_ID }
+    : Platform.OS === 'android'
+      ? {
+          'X-Android-Package': APP_BUNDLE_ID,
+          ...(ANDROID_CERT_SHA1 ? { 'X-Android-Cert': ANDROID_CERT_SHA1 } : {}),
+        }
+      : {};
+
+const placesApiHeaders = (fieldMask?: string): Record<string, string> => ({
+  'Content-Type': 'application/json',
+  'X-Goog-Api-Key': GOOGLE_PLACES_API_KEY,
+  ...(fieldMask ? { 'X-Goog-FieldMask': fieldMask } : {}),
+  ...appIdentificationHeaders,
+});
+
+// A hung request would otherwise spin the search UI forever and could stall
+// the background location task for its whole execution budget.
+const FETCH_TIMEOUT_MS = 10000;
+
+async function fetchWithTimeout(
+  url: string,
+  init: RequestInit = {},
+  timeoutMs: number = FETCH_TIMEOUT_MS
+): Promise<Response> {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), timeoutMs);
+  try {
+    return await fetch(url, { ...init, signal: controller.signal });
+  } finally {
+    clearTimeout(timer);
+  }
+}
 
 // Dev-only logger. Avoids shipping user search queries / precise coordinates /
 // raw API responses to production device logs and crash aggregators.
@@ -33,10 +78,7 @@ export class PlacesApiKeyError extends Error {
 // New Places API (v1) endpoints
 const AUTOCOMPLETE_API_URL = 'https://places.googleapis.com/v1/places:autocomplete';
 const PLACE_DETAILS_URL = 'https://places.googleapis.com/v1/places';
-const NEARBY_SEARCH_URL = 'https://places.googleapis.com/v1/places:searchNearby';
-
-// Legacy Places API endpoint (for nearby search)
-const PLACES_API_URL = 'https://maps.googleapis.com/maps/api/place/nearbysearch/json';
+const TEXT_SEARCH_URL = 'https://places.googleapis.com/v1/places:searchText';
 
 /**
  * A single popular chain entry (name + broad category label).
@@ -121,14 +163,12 @@ export interface UserLocationBias {
 
 // --- Raw (untyped) Google API JSON shapes, narrowed locally ---------------
 
-interface LegacyNearbyApiResponse {
-  status?: string;
-  error_message?: string;
-  results?: Array<{
-    name: string;
-    vicinity?: string;
-    place_id?: string;
-    geometry?: { location?: { lat: number; lng: number } };
+interface TextSearchApiResponse {
+  places?: Array<{
+    id?: string;
+    displayName?: { text?: string };
+    formattedAddress?: string;
+    location?: { latitude: number; longitude: number };
   }>;
 }
 
@@ -233,32 +273,52 @@ export const findNearbyChainLocations = async (
       return null;
     }
 
-    const url = `${PLACES_API_URL}?location=${latitude},${longitude}&radius=${radius}&keyword=${encodeURIComponent(businessName)}&key=${GOOGLE_PLACES_API_KEY}`;
+    // Places API v1 text search — same API family as the rest of this file,
+    // so one key restricted to "Places API (New)" covers every request. (The
+    // legacy nearbysearch endpoint used before required separately enabling
+    // the legacy API, which silently broke chain reminders on restricted keys.)
+    const response = await fetchWithTimeout(TEXT_SEARCH_URL, {
+      method: 'POST',
+      headers: placesApiHeaders(
+        'places.id,places.displayName,places.formattedAddress,places.location'
+      ),
+      body: JSON.stringify({
+        textQuery: businessName,
+        locationBias: {
+          circle: {
+            center: { latitude, longitude },
+            // API accepts 0–50000 metres.
+            radius: Math.min(Math.max(radius, 0), 50000),
+          },
+        },
+        pageSize: 20,
+        languageCode: 'en',
+      }),
+    });
 
-    const response = await fetch(url);
-    const data = (await response.json()) as LegacyNearbyApiResponse;
+    const data = (await response.json()) as TextSearchApiResponse;
 
-    if (data.status !== 'OK' && data.status !== 'ZERO_RESULTS') {
-      console.error('Places API error:', data.status, data.error_message);
+    if (!response.ok) {
+      console.error('Places text search error:', response.status, data);
       return null;
     }
 
-    if (data.results && data.results.length > 0) {
-      // Some place types come back without geometry; force-unwrapping it
+    if (data.places && data.places.length > 0) {
+      // Some place types come back without coordinates; force-unwrapping
       // would throw inside .map and (via the catch) silently drop ALL
       // results. Filter to results with finite coordinates first.
-      return data.results
+      return data.places
         .filter(
           (place) =>
-            Number.isFinite(place.geometry?.location?.lat) &&
-            Number.isFinite(place.geometry?.location?.lng)
+            Number.isFinite(place.location?.latitude) &&
+            Number.isFinite(place.location?.longitude)
         )
         .map((place): NearbyPlaceResult => ({
-          name: place.name,
-          address: place.vicinity,
-          latitude: place.geometry!.location!.lat,
-          longitude: place.geometry!.location!.lng,
-          placeId: place.place_id,
+          name: place.displayName?.text || businessName,
+          address: place.formattedAddress,
+          latitude: place.location!.latitude,
+          longitude: place.location!.longitude,
+          placeId: place.id,
         }));
     }
 
@@ -416,12 +476,9 @@ async function searchBusinessesViaAPI(query: string): Promise<BusinessSuggestion
       languageCode: 'en',
     };
 
-    const response = await fetch(AUTOCOMPLETE_API_URL, {
+    const response = await fetchWithTimeout(AUTOCOMPLETE_API_URL, {
       method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'X-Goog-Api-Key': GOOGLE_PLACES_API_KEY,
-      },
+      headers: placesApiHeaders(),
       body: JSON.stringify(requestBody),
     });
 
@@ -530,12 +587,9 @@ export const autocompleteSearch = async (
       debugLog('[autocompleteSearch] Using location bias:', userLocation);
     }
 
-    const response = await fetch(AUTOCOMPLETE_API_URL, {
+    const response = await fetchWithTimeout(AUTOCOMPLETE_API_URL, {
       method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'X-Goog-Api-Key': GOOGLE_PLACES_API_KEY,
-      },
+      headers: placesApiHeaders(),
       body: JSON.stringify(requestBody),
     });
 
@@ -626,13 +680,9 @@ export const getPlaceDetailsNew = async (placeId: string): Promise<PlaceDetails 
     // value containing /, ?, # or .. can't alter the request target.
     const url = `${PLACE_DETAILS_URL}/${encodeURIComponent(placeId)}`;
 
-    const response = await fetch(url, {
+    const response = await fetchWithTimeout(url, {
       method: 'GET',
-      headers: {
-        'Content-Type': 'application/json',
-        'X-Goog-Api-Key': GOOGLE_PLACES_API_KEY,
-        'X-Goog-FieldMask': 'id,location,formattedAddress',
-      },
+      headers: placesApiHeaders('id,location,formattedAddress'),
     });
 
     const data = (await response.json()) as PlaceDetailsApiResponse;

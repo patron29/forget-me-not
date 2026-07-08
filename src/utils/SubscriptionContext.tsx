@@ -23,9 +23,13 @@ interface PurchaseResult {
   error?: unknown;
 }
 
-// RevenueCat API Keys - Replace with your actual keys from RevenueCat dashboard
-const REVENUECAT_API_KEY_IOS = 'your_ios_api_key_here';
-const REVENUECAT_API_KEY_ANDROID = 'your_android_api_key_here';
+// RevenueCat public SDK keys, loaded from the environment so real keys never
+// live in tracked source. Set EXPO_PUBLIC_REVENUECAT_IOS_KEY (appl_...) and
+// EXPO_PUBLIC_REVENUECAT_ANDROID_KEY (goog_...) in .env locally and in EAS
+// environment variables for builds. Without them the app runs in demo mode
+// (no purchases possible).
+const REVENUECAT_API_KEY_IOS = process.env.EXPO_PUBLIC_REVENUECAT_IOS_KEY || '';
+const REVENUECAT_API_KEY_ANDROID = process.env.EXPO_PUBLIC_REVENUECAT_ANDROID_KEY || '';
 
 // Product identifiers
 export const PRODUCT_IDS = {
@@ -52,6 +56,10 @@ export interface SubscriptionContextValue {
   offerings: PurchasesOffering | null;
   isLoading: boolean;
   customerInfo: CustomerInfo | null;
+  /** True when real RevenueCat keys are configured (billing is live). */
+  isConfigured: boolean;
+  /** Re-fetch offerings (e.g. after a network failure). True on success. */
+  refreshOfferings: () => Promise<boolean>;
   checkSubscription: () => Promise<CustomerInfo | null>;
   purchasePackage: (pkg: PurchasesPackage) => Promise<PurchaseResult>;
   restorePurchases: () => Promise<PurchaseResult>;
@@ -73,6 +81,7 @@ export function SubscriptionProvider({ children }: { children: ReactNode }) {
   const [offerings, setOfferings] = useState<PurchasesOffering | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [customerInfo, setCustomerInfo] = useState<CustomerInfo | null>(null);
+  const [isConfigured, setIsConfigured] = useState(false);
   const customerInfoListener = useRef<CustomerInfoUpdateListener | null>(null);
 
   useEffect(() => {
@@ -97,6 +106,8 @@ export function SubscriptionProvider({ children }: { children: ReactNode }) {
         apiKey.startsWith('appl_') || apiKey.startsWith('goog_');
 
       if (hasRealKey) {
+        setIsConfigured(true);
+
         // Show cached status immediately for snappy UI, but treat it as
         // optimistic only — checkSubscription() below reconciles against the
         // authoritative RevenueCat entitlement and overwrites it.
@@ -183,14 +194,17 @@ export function SubscriptionProvider({ children }: { children: ReactNode }) {
     }
   };
 
-  const loadOfferings = async () => {
+  const loadOfferings = async (): Promise<boolean> => {
     try {
       const offerings = await Purchases.getOfferings();
       if (offerings.current) {
         setOfferings(offerings.current);
+        return true;
       }
+      return false;
     } catch (error) {
       console.error('[Subscription] Error loading offerings:', error);
+      return false;
     }
   };
 
@@ -266,8 +280,10 @@ export function SubscriptionProvider({ children }: { children: ReactNode }) {
     offerings,
     isLoading,
     customerInfo,
+    isConfigured,
 
     // Actions
+    refreshOfferings: loadOfferings,
     checkSubscription,
     purchasePackage,
     restorePurchases,

@@ -3,8 +3,10 @@ import React, {
   useState,
   useEffect,
   useContext,
+  useRef,
   ReactNode,
 } from 'react';
+import { AppState } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as Location from 'expo-location';
 import * as Notifications from 'expo-notifications';
@@ -21,6 +23,8 @@ import {
 const LOCATION_TASK_NAME = 'background-location-task';
 
 type LocationPermissionState = 'full' | 'foreground' | 'denied' | null;
+
+type NotificationPermissionState = 'granted' | 'denied' | null;
 
 /** A coordinate pair, the minimum needed for proximity checks. */
 interface Coords {
@@ -45,6 +49,7 @@ export interface ReminderContextValue {
   getRemindersByLocation: (locationName: string) => Reminder[];
   checkProximity: (currentLocation: Coords) => Promise<void>;
   locationPermission: LocationPermissionState;
+  notificationPermission: NotificationPermissionState;
   isPremium: boolean;
   getReminderUsage: () => {
     active: number;
@@ -76,8 +81,17 @@ export const ReminderProvider = ({ children }: { children: ReactNode }) => {
   const [reminders, setReminders] = useState<Reminder[]>([]);
   const [locationPermission, setLocationPermission] =
     useState<LocationPermissionState>(null);
+  const [notificationPermission, setNotificationPermission] =
+    useState<NotificationPermissionState>(null);
   const [isLoaded, setIsLoaded] = useState(false);
   const [isGeofencingActive, setIsGeofencingActive] = useState(false);
+  // When the initial load fails we must not persist the (empty) in-memory
+  // state, or a transient storage error would permanently wipe saved data.
+  const persistenceBlocked = useRef(false);
+  const isLoadedRef = useRef(false);
+  // Serializes start/stop geofencing so a rapid state change can't interleave
+  // an in-flight stop with a new start (or vice versa).
+  const geofencingOp = useRef<Promise<void>>(Promise.resolve());
 
   // Get subscription status - may be null if not wrapped in SubscriptionProvider
   let subscriptionContext = null;
@@ -93,26 +107,114 @@ export const ReminderProvider = ({ children }: { children: ReactNode }) => {
     requestPermissions();
   }, []);
 
+  // Only save after initial load is complete
   useEffect(() => {
-    // Only save after initial load is complete
     if (isLoaded) {
+      isLoadedRef.current = true;
       saveReminders();
-
-      // Stop background location tracking once nothing needs geofencing,
-      // and (re)start it when active reminders exist and we're permitted.
-      const hasActive = reminders.some((r) => !r.completed);
-      if (!hasActive && isGeofencingActive) {
-        stopGeofencing();
-      } else if (hasActive && !isGeofencingActive && locationPermission === 'full') {
-        setupGeofencing();
-      }
     }
   }, [reminders, isLoaded]);
+
+  // Stop background location tracking once nothing needs geofencing, and
+  // (re)start it when active reminders exist and we're permitted. Depends on
+  // locationPermission so tracking starts as soon as the permission resolves —
+  // not only on the next reminder mutation.
+  useEffect(() => {
+    if (!isLoaded) return;
+    const hasActive = reminders.some((r) => !r.completed);
+    if (!hasActive && isGeofencingActive) {
+      stopGeofencing();
+    } else if (hasActive && !isGeofencingActive && locationPermission === 'full') {
+      setupGeofencing();
+    }
+  }, [reminders, isLoaded, locationPermission, isGeofencingActive]);
+
+  // When the app returns to the foreground: pick up any trigger metadata the
+  // background task wrote while we were away (otherwise our next save would
+  // clobber it and reminders would re-fire early), and re-read permissions in
+  // case the user changed them in the system Settings.
+  useEffect(() => {
+    const subscription = AppState.addEventListener('change', (state) => {
+      if (state === 'active') {
+        refreshFromStorage();
+        refreshPermissions();
+      }
+    });
+    return () => subscription.remove();
+  }, []);
+
+  const refreshFromStorage = async () => {
+    if (!isLoadedRef.current) return;
+    try {
+      const saved = await AsyncStorage.getItem('reminders');
+      const wasBlocked = persistenceBlocked.current;
+      // Storage readable again: safe to resume persisting.
+      persistenceBlocked.current = false;
+      if (saved === null) return;
+      const stored = parseStoredReminders(saved);
+
+      // Merge instead of replace: in-memory state stays authoritative for
+      // adds/edits/deletes (a replace could revert a user action committed
+      // while the read was in flight); storage contributes only the newer
+      // trigger metadata the background task wrote while we were away.
+      setReminders((current) => {
+        const storedById = new Map(stored.map((r) => [r.id, r]));
+        const parseTime = (iso: string | null | undefined) => {
+          const t = iso ? Date.parse(iso) : 0;
+          return Number.isFinite(t) ? t : 0;
+        };
+        const merged = current.map((r) => {
+          const s = storedById.get(r.id);
+          if (!s || parseTime(s.lastTriggeredAt) <= parseTime(r.lastTriggeredAt)) {
+            return r;
+          }
+          return {
+            ...r,
+            triggeredCount: s.triggeredCount,
+            lastTriggeredAt: s.lastTriggeredAt,
+          };
+        });
+        if (wasBlocked) {
+          // The initial load failed, so memory never saw what storage holds —
+          // adopt those reminders too instead of dropping them.
+          const knownIds = new Set(current.map((r) => r.id));
+          merged.push(...stored.filter((r) => !knownIds.has(r.id)));
+        }
+        return merged;
+      });
+    } catch (error) {
+      // Keep the in-memory state; we'll try again on the next foreground.
+      console.warn('Could not refresh reminders from storage:', error);
+    }
+  };
+
+  // Non-prompting permission re-check (unlike requestPermissions, safe to run
+  // on every foreground). Leaves state untouched while a prompt is undecided.
+  const refreshPermissions = async () => {
+    try {
+      const foreground = await Location.getForegroundPermissionsAsync();
+      if (foreground.status === 'granted') {
+        const background = await Location.getBackgroundPermissionsAsync();
+        setLocationPermission(background.status === 'granted' ? 'full' : 'foreground');
+      } else if (foreground.status === 'denied') {
+        setLocationPermission('denied');
+      }
+      const notif = await Notifications.getPermissionsAsync();
+      if (notif.status === 'granted') {
+        setNotificationPermission('granted');
+      } else if (notif.status === 'denied') {
+        setNotificationPermission('denied');
+      }
+    } catch (error) {
+      console.warn('Could not refresh permissions:', error);
+    }
+  };
 
   const requestPermissions = async () => {
     try {
       // Request notification permissions
       const { status: notifStatus } = await Notifications.requestPermissionsAsync();
+      setNotificationPermission(notifStatus === 'granted' ? 'granted' : 'denied');
 
       // Request location permissions
       const { status: foregroundStatus } = await Location.requestForegroundPermissionsAsync();
@@ -138,19 +240,32 @@ export const ReminderProvider = ({ children }: { children: ReactNode }) => {
   };
 
   const loadReminders = async () => {
-    try {
-      const savedReminders = await AsyncStorage.getItem('reminders');
-      if (savedReminders) {
-        setReminders(parseStoredReminders(savedReminders));
+    for (let attempt = 1; attempt <= 2; attempt++) {
+      try {
+        const savedReminders = await AsyncStorage.getItem('reminders');
+        if (savedReminders) {
+          setReminders(parseStoredReminders(savedReminders));
+        }
+        setIsLoaded(true);
+        return;
+      } catch (error) {
+        if (attempt === 1) {
+          // Transient native-storage hiccup; retry once before giving up.
+          await new Promise((resolve) => setTimeout(resolve, 300));
+        } else {
+          console.error('Error loading reminders:', error);
+          // Couldn't read storage. Block saving for this session so the empty
+          // in-memory state can't overwrite the user's persisted reminders;
+          // refreshFromStorage lifts the block once a read succeeds again.
+          persistenceBlocked.current = true;
+          setIsLoaded(true);
+        }
       }
-      setIsLoaded(true);
-    } catch (error) {
-      console.error('Error loading reminders:', error);
-      setIsLoaded(true);
     }
   };
 
   const saveReminders = async () => {
+    if (persistenceBlocked.current) return;
     try {
       await AsyncStorage.setItem('reminders', JSON.stringify(reminders));
     } catch (error) {
@@ -217,10 +332,17 @@ export const ReminderProvider = ({ children }: { children: ReactNode }) => {
     return newReminder;
   };
 
-  const setupGeofencing = async () => {
+  // Queue an operation behind any in-flight geofencing start/stop so the two
+  // can't interleave (e.g. a stop still awaiting the OS while a start begins).
+  const enqueueGeofencingOp = (op: () => Promise<void>): Promise<void> => {
+    const run = () => op();
+    geofencingOp.current = geofencingOp.current.then(run, run);
+    return geofencingOp.current;
+  };
+
+  const setupGeofencing = () => enqueueGeofencingOp(async () => {
     try {
       if (locationPermission !== 'full') {
-        console.log('Background location permission not granted');
         return;
       }
 
@@ -250,12 +372,12 @@ export const ReminderProvider = ({ children }: { children: ReactNode }) => {
     } catch (error) {
       console.error('Error setting up geofencing:', error);
     }
-  };
+  });
 
   // Tear down background location tracking. Called when no active reminders
   // remain so we don't keep draining battery / holding location access (a
   // real privacy concern) once there's nothing left to geofence for.
-  const stopGeofencing = async () => {
+  const stopGeofencing = () => enqueueGeofencingOp(async () => {
     try {
       const running = await Location.hasStartedLocationUpdatesAsync(
         LOCATION_TASK_NAME
@@ -267,7 +389,7 @@ export const ReminderProvider = ({ children }: { children: ReactNode }) => {
     } catch (error) {
       console.error('Error stopping geofencing:', error);
     }
-  };
+  });
 
   const checkProximity = async (currentLocation: Coords) => {
     try {
@@ -275,6 +397,12 @@ export const ReminderProvider = ({ children }: { children: ReactNode }) => {
       const remindersToUpdate: string[] = [];
 
       for (const reminder of activeReminders) {
+        // Throttled reminders can't fire regardless of proximity — skip them
+        // BEFORE the chain check below, which costs a billable Places request.
+        if (!canTrigger(reminder.lastTriggeredAt)) {
+          continue;
+        }
+
         let shouldTrigger = false;
         let matchedLocation: Partial<LocationData> | null = null;
 
@@ -310,8 +438,7 @@ export const ReminderProvider = ({ children }: { children: ReactNode }) => {
           }
         }
 
-        // If within radius, fire only if outside the throttle window.
-        if (shouldTrigger && canTrigger(reminder.lastTriggeredAt)) {
+        if (shouldTrigger) {
           await sendNotification(reminder, matchedLocation);
           remindersToUpdate.push(reminder.id);
         }
@@ -435,6 +562,7 @@ export const ReminderProvider = ({ children }: { children: ReactNode }) => {
         getRemindersByLocation,
         checkProximity,
         locationPermission,
+        notificationPermission,
         // Subscription-related
         isPremium,
         getReminderUsage,
@@ -478,9 +606,16 @@ TaskManager.defineTask<{ locations: Location.LocationObject[] }>(
     }
 
     const now = Date.now();
-    let hasUpdates = false;
+    // id -> new lastTriggeredAt for reminders that fired this pass.
+    const triggerUpdates = new Map<string, string>();
 
     for (const reminder of activeReminders) {
+      // Throttled reminders can't fire regardless of proximity — skip them
+      // BEFORE the chain check below, which costs a billable Places request.
+      if (!canTrigger(reminder.lastTriggeredAt, now)) {
+        continue;
+      }
+
       let shouldTrigger = false;
       let matchedLocation: Partial<LocationData> | null = null;
 
@@ -520,38 +655,45 @@ TaskManager.defineTask<{ locations: Location.LocationObject[] }>(
       }
 
       if (shouldTrigger) {
-        // Throttle: only fire if outside the window (canTrigger guards NaN).
-        if (canTrigger(reminder.lastTriggeredAt, now)) {
-          // Update reminder in the array
-          reminder.triggeredCount = (reminder.triggeredCount || 0) + 1;
-          reminder.lastTriggeredAt = new Date().toISOString();
-          hasUpdates = true;
+        triggerUpdates.set(reminder.id, new Date().toISOString());
 
-          // Send notification
-          let locationText = reminder.location.name;
-          if (reminder.location.isChain && matchedLocation) {
-            locationText = `${matchedLocation.name}${matchedLocation.address ? ` (${matchedLocation.address})` : ''}`;
-          } else if (matchedLocation && matchedLocation.name) {
-            // Multi-location mode: show which specific location was matched
-            locationText = `${matchedLocation.name}${matchedLocation.address ? ` (${matchedLocation.address})` : ''}`;
-          }
-
-          await Notifications.scheduleNotificationAsync({
-            content: {
-              title: 'Forget Me Not!',
-              body: `${reminder.text} at ${locationText}`,
-              data: { reminderId: reminder.id },
-              sound: true,
-            },
-            trigger: null,
-          });
+        // Send notification
+        let locationText = reminder.location.name;
+        if (matchedLocation && matchedLocation.name) {
+          // Chain / multi-location: show which specific location matched.
+          locationText = `${matchedLocation.name}${matchedLocation.address ? ` (${matchedLocation.address})` : ''}`;
         }
+
+        await Notifications.scheduleNotificationAsync({
+          content: {
+            title: 'Forget Me Not!',
+            body: `${reminder.text} at ${locationText}`,
+            data: { reminderId: reminder.id },
+            sound: true,
+          },
+          trigger: null,
+        });
       }
     }
 
-    // Save updated reminders back to AsyncStorage
-    if (hasUpdates) {
-      await AsyncStorage.setItem('reminders', JSON.stringify(reminders));
+    // Persist the new trigger timestamps. The chain checks above can await the
+    // network for seconds, during which the user may have added, edited, or
+    // deleted reminders — writing back our stale copy would resurrect deleted
+    // reminders and drop edits. Re-read storage and merge only the trigger
+    // metadata into the fresh array instead.
+    if (triggerUpdates.size > 0) {
+      const freshRaw = await AsyncStorage.getItem('reminders');
+      const fresh = parseStoredReminders(freshRaw);
+      const merged = fresh.map((r) =>
+        triggerUpdates.has(r.id)
+          ? {
+              ...r,
+              triggeredCount: (r.triggeredCount || 0) + 1,
+              lastTriggeredAt: triggerUpdates.get(r.id)!,
+            }
+          : r
+      );
+      await AsyncStorage.setItem('reminders', JSON.stringify(merged));
     }
   } catch (taskError) {
     console.error('Background location task error:', taskError);
